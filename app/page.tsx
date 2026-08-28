@@ -4,6 +4,7 @@ import { TryOnDemo } from "@/components/TryOnDemo";
 import { BudgetLooks } from "@/components/BudgetLooks";
 import { Plans } from "@/components/Plans";
 import "./v31.css";
+import "./brand.css";
 
 const editorialImages = {
   vibrantWoman: "https://images.unsplash.com/photo-1776790376541-233f911d90b4?auto=format&fit=crop&w=1600&q=88",
