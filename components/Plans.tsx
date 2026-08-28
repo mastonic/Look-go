@@ -1,12 +1,11 @@
 const features = [
   ["Profil style, taille, couleurs & budget", true, true, true],
   ["3 propositions Signature / Équilibre / Smart", true, true, true],
-  ["Produits achetables & liens marchands", true, true, true],
-  ["Dressing numérique", "Limité", true, true],
-  ["Suggestions de looks", "Limité", true, "Étendu"],
-  ["Personal Shopper conversationnel", "Découverte", true, "Avancé"],
-  ["Virtual Try-On", "Essais découverte", "Quota supérieur", "Quota premium"],
-  ["Analyse morphologie & colorimétrie", false, true, "Avancée"],
+  ["Dressing numérique", "Bêta", true, true],
+  ["Suggestions de looks", "Bêta", true, "Étendu"],
+  ["Personal Shopper conversationnel", "Bêta", true, "Avancé"],
+  ["Virtual Try-On", "En test", "Quota supérieur", "Quota premium"],
+  ["Analyse morphologie & colorimétrie", "En test", true, "Avancée"],
   ["Look complet sous un budget donné", false, true, true],
   ["Alternative moins chère / remix du look", false, true, true],
   ["Mélange de plusieurs boutiques", false, true, true],
@@ -26,8 +25,8 @@ function Cell({value}:{value:boolean|string}) {
 
 export function Plans() {
   return <section id="offres" className="plans-section section"><div className="section-shell">
-    <div className="plans-head"><p className="eyebrow">DU BASIC AU PREMIUM</p><h2>Commencez simplement.<br/><em>Débloquez votre dressing.</em></h2><p>La structure tarifaire définit les niveaux fonctionnels. Les prix d’abonnement seront fixés après mesure du coût réel du Try-On et des services IA.</p></div>
-    <div className="plans-table-wrap"><table className="plans-table"><thead><tr><th>Fonctionnalité</th><th>BASIC</th><th>PLUS</th><th>PREMIUM</th></tr></thead><tbody>{features.map(([name,basic,plus,premium]) => <tr key={String(name)}><th>{name}</th><td><Cell value={basic as boolean|string}/></td><td><Cell value={plus as boolean|string}/></td><td><Cell value={premium as boolean|string}/></td></tr>)}</tbody></table></div>
-    <p className="plans-note">Les fonctionnalités dépendant de catalogues marchands, de l’affiliation, des stocks, des alertes et du Try-On réel ne seront annoncées comme actives qu’après connexion et validation de leurs backends respectifs.</p>
+    <div className="plans-head"><p className="eyebrow">BÊTA LOOK&GO</p><h2>Testez le cœur du produit.<br/><em>Les options arrivent ensuite.</em></h2><p>Pendant la bêta, nous validons d’abord le profil, les trois budgets, la qualité des recommandations et le Try-On. Les abonnements et fonctions marchandes seront activés uniquement lorsqu’ils seront réellement connectés.</p></div>
+    <div className="plans-table-wrap"><table className="plans-table"><thead><tr><th>Fonctionnalité</th><th>DÉCOUVERTE</th><th>PLUS</th><th>PREMIUM</th></tr></thead><tbody>{features.map(([name,basic,plus,premium]) => <tr key={String(name)}><th>{name}</th><td><Cell value={basic as boolean|string}/></td><td><Cell value={plus as boolean|string}/></td><td><Cell value={premium as boolean|string}/></td></tr>)}</tbody></table></div>
+    <p className="plans-note">Aucun stock, partenariat, lien affilié, abonnement ou capacité Try-On n’est présenté comme actif avant validation de son backend.</p>
   </div></section>;
 }
