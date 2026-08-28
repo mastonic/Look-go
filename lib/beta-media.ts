@@ -1,7 +1,7 @@
 const DB_NAME="lookgo_beta_media_v1";
 const STORE="media";
 const DB_VERSION=1;
-export type BetaMediaKey="portrait"|"fullBody"|"tryonSignature"|"tryonBalance"|"tryonSmart";
+export type BetaMediaKey="portrait"|"fullBody"|"tryonSignature"|"tryonBalance"|"tryonSmart"|"videoSignature"|"videoBalance"|"videoSmart";
 
 function openDb():Promise<IDBDatabase>{
  return new Promise((resolve,reject)=>{
