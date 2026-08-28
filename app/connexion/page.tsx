@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import "./auth.css";
 
@@ -9,6 +9,7 @@ export default function ConnexionPage(){
   const [mode,setMode]=useState<"login"|"register">("login");
   const [error,setError]=useState("");
   const [loading,setLoading]=useState(false);
+  useEffect(()=>{if(new URLSearchParams(window.location.search).get("mode")==="register") setMode("register");},[]);
 
   async function submit(e:FormEvent<HTMLFormElement>){
     e.preventDefault(); setError(""); setLoading(true);
