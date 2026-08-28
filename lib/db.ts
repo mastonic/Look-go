@@ -2,7 +2,8 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import fs from "node:fs";
 
-const dataDir = process.env.LOOKGO_DATA_DIR || path.join(process.cwd(), "data");
+const defaultDir = process.env.VERCEL ? "/tmp/lookgo" : path.join(process.cwd(), "data");
+const dataDir = process.env.LOOKGO_DATA_DIR || defaultDir;
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const dbPath = process.env.LOOKGO_SQLITE_PATH || path.join(dataDir, "lookgo.db");
@@ -81,5 +82,5 @@ export function upsertOAuthUser(email: string, name?: string | null, image?: str
 }
 
 export function getProfileByUserId(userId: number) {
-  return db.prepare("SELECT p.*, u.email, u.name, u.image, u.provider FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?").get(userId);
+  return db.prepare("SELECT p.*, u.email, u.name, u.image, u.provider FROM profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=?").get(userId) as Record<string, unknown> | undefined;
 }
