@@ -10,3 +10,5 @@ A premium private digital dressing experience combining personal styling, wardro
 
 Production branch: `main`
 Feature work should be developed on dedicated branches and merged only after validation.
+
+Vercel framework preset: Next.js.
