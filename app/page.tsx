@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { TryOnDemo } from "@/components/TryOnDemo";
+import "./v31.css";
 
 const editorialImages = {
   vibrantWoman: "https://images.unsplash.com/photo-1776790376541-233f911d90b4?auto=format&fit=crop&w=1600&q=88",
@@ -39,7 +40,7 @@ export default function HomePage() {
           <div className="v3-pill">COLORFUL LUXURY · YOUR STYLE, YOUR ENERGY</div>
           <h1>Votre dressing.<br />Votre style.<br /><em>En couleur.</em></h1>
           <p className="hero-intro">Découvrez des vêtements qui vous ressemblent vraiment, visualisez-les sur vous et composez un dressing personnel, vivant et assumé.</p>
-          <div className="cta-row"><Link href="#commencer" className="button button-coral">Créer mon dressing privé</Link><Link href="#try-on" className="button button-ghost">Voir le Try-On</Link></div>
+          <div className="cta-row"><Link href="#commencer" className="button button-coral">Créer mon dressing privé</Link><Link href="#motion" className="button button-ghost">Comprendre Look&Go</Link></div>
           <div className="color-signals"><span>STYLE</span><span>FIT</span><span>COULEURS</span><span>OCCASION</span></div>
         </div>
         <div className="hero-visual"><div className="hero-sun" aria-hidden="true" /><TryOnDemo /><div className="hero-sticker">100%<br/>VOUS</div></div>
@@ -47,9 +48,24 @@ export default function HomePage() {
 
       <section className="marquee" aria-hidden="true"><div>ESSAYEZ · COMPAREZ · COMPOSEZ · OSEZ · ESSAYEZ · COMPAREZ · COMPOSEZ · OSEZ ·</div></section>
 
+      <section id="motion" className="motion-story">
+        <div className="motion-story-inner">
+          <div className="motion-head">
+            <div><p className="eyebrow eyebrow-light">LE CONCEPT EN MOUVEMENT</p><h2>De vous.<br/><em>À votre look.</em></h2></div>
+            <div><p>Look&Go transforme quelques informations personnelles en une expérience simple : comprendre votre style, sélectionner, visualiser, puis décider.</p><div className="photo-real-note">Animation illustrative — le moteur réel sera connecté au produit final.</div></div>
+          </div>
+          <div className="motion-track">
+            <article className="motion-card"><div className="motion-dot"/><span>01 · PROFIL</span><h3>On part de vous.</h3><p>Silhouette, taille, couleurs, style, budget et occasion.</p></article>
+            <article className="motion-card"><div className="motion-dot"/><span>02 · SÉLECTION</span><h3>On réduit le bruit.</h3><p>Vous ne voyez plus tout. Vous voyez ce qui a du sens pour vous.</p></article>
+            <article className="motion-card"><div className="motion-dot"/><span>03 · TRY-ON</span><h3>Vous le voyez.</h3><p>Le look est visualisé sur vous avant que vous preniez une décision.</p></article>
+            <article className="motion-card"><div className="motion-dot"/><span>04 · DÉCISION</span><h3>Vous choisissez.</h3><p>Vous comparez, gardez, composez votre dressing et passez à l’action.</p></article>
+          </div>
+        </div>
+      </section>
+
       <section id="try-on" className="section section-shell split-section colorful-split">
         <div className="section-kicker">TRY-ON</div>
-        <div className="section-copy-large"><h2>Essayez-le.<br /><em>Avant de l’acheter.</em></h2><p>Une pièce vous plaît ? Ne l’imaginez plus seulement. Découvrez une inspiration visuelle du look, comparez et décidez avec plus de confiance.</p><Link href="#commencer" className="underlined-link">Essayer mon premier look ↗</Link></div>
+        <div className="section-copy-large"><h2>Essayez-le.<br /><em>Avant de l’acheter.</em></h2><p>Une pièce vous plaît ? Ne l’imaginez plus seulement. Découvrez une inspiration visuelle du look, comparez et décidez avec plus de confiance.</p><Link href="#commencer" className="button button-coral">Essayer mon premier look</Link></div>
         <div className="editorial-image editorial-image-tall image-frame-coral"><Image src={editorialImages.vibrantWoman} alt="Femme noire portant un look coloré dans un portrait mode" fill sizes="(max-width: 768px) 100vw, 42vw" /></div>
       </section>
 
