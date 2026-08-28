@@ -1,7 +1,7 @@
 const DB_NAME="lookgo_beta_media_v1";
 const STORE="media";
 const DB_VERSION=1;
-export type BetaMediaKey="portrait"|"fullBody";
+export type BetaMediaKey="portrait"|"fullBody"|"tryonSignature"|"tryonBalance"|"tryonSmart";
 
 function openDb():Promise<IDBDatabase>{
  return new Promise((resolve,reject)=>{
@@ -12,7 +12,7 @@ function openDb():Promise<IDBDatabase>{
  });
 }
 
-export async function saveBetaMedia(key:BetaMediaKey,file:File){
+export async function saveBetaMedia(key:BetaMediaKey,file:Blob){
  const db=await openDb();
  await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(file,key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)});
  db.close();
