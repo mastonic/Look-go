@@ -32,8 +32,8 @@ export function BudgetLooks() {
     <section id="shopping" className="budget-looks section">
       <div className="section-shell">
         <div className="budget-head">
-          <div><p className="eyebrow eyebrow-light">SHOPPABLE LOOKS</p><h2>Un style.<br/><em>Trois budgets.</em></h2></div>
-          <div><p>Look&Go a vocation à composer des tenues avec de vrais produits disponibles à l’achat. Quand un marchand fournit un flux produit ou une intégration autorisée, prix, disponibilité et lien marchand pourront être raccordés automatiquement.</p><span className="truth-badge">DÉMO PRODUIT · PAS DE FAUX STOCK</span></div>
+          <div><p className="eyebrow eyebrow-light">VOS 3 BUDGETS</p><h2>Un style.<br/><em>Trois budgets.</em></h2></div>
+          <div><p>En bêta, Look&Go teste d’abord votre profil, vos tailles et votre budget. Les vrais catalogues marchands et leurs liens d’achat seront activés progressivement après validation des intégrations.</p><span className="truth-badge">BÊTA · AUCUN FAUX STOCK</span></div>
         </div>
         <div className="budget-grid">
           {looks.map((look, index) => (
@@ -43,7 +43,7 @@ export function BudgetLooks() {
               <p className="budget-caption">{look.budget}</p>
               <p>{look.description}</p>
               <div className="piece-list">{look.examples.map(item => <div key={item}><span>↗</span>{item}</div>)}</div>
-              <div className="budget-actions"><Link href="#try-on" className="button budget-button">Voir sur moi</Link><button type="button" disabled aria-label="Achat disponible après connexion des catalogues marchands">Acheter bientôt</button></div>
+              <div className="budget-actions"><Link href="/connexion?mode=register" className="button budget-button">Tester ce style sur moi</Link><span className="truth-badge">Achat réel bientôt</span></div>
             </article>
           ))}
         </div>
