@@ -4,6 +4,7 @@ import { TryOnDemo } from "@/components/TryOnDemo";
 import { BudgetLooks } from "@/components/BudgetLooks";
 import { Plans } from "@/components/Plans";
 import "./v31.css";
+import "./brand.css";
 
 const editorialImages = {
   vibrantWoman: "https://images.unsplash.com/photo-1776790376541-233f911d90b4?auto=format&fit=crop&w=1600&q=88",
@@ -13,7 +14,7 @@ const editorialImages = {
 
 export default function HomePage() {
   return <main>
-    <header className="site-header"><Link href="#top" className="wordmark">LOOK&GO</Link><nav className="desktop-nav"><Link href="#shopping">3 budgets</Link><Link href="#try-on">Try-On</Link><Link href="#styliste">Styliste</Link><Link href="#offres">Offres</Link></nav><div className="header-actions"><Link href="/connexion" className="text-link">Connexion</Link><Link href="/connexion?mode=register" className="button button-small button-dark">Créer mon dressing</Link></div></header>
+    <header className="site-header"><Link href="#top" className="brand-lockup" aria-label="Look&Go, accueil"><Image src="/lookgo-logo.svg" alt="" width={720} height={180} priority className="brand-logo"/></Link><nav className="desktop-nav"><Link href="#shopping">3 budgets</Link><Link href="#try-on">Try-On</Link><Link href="#styliste">Styliste</Link><Link href="#offres">Offres</Link></nav><div className="header-actions"><Link href="/connexion" className="text-link">Connexion</Link><Link href="/connexion?mode=register" className="button button-small button-dark">Créer mon dressing</Link></div></header>
 
     <section id="top" className="hero section-shell"><div className="hero-copy"><div className="v3-pill">PERSONAL SHOPPER · TRY-ON · SHOPPING</div><h1>Votre style.<br/>Trois budgets.<br/><em>À vous de choisir.</em></h1><p className="hero-intro">Look&Go compose des looks pour vous, avec l’objectif d’utiliser de vrais vêtements disponibles à l’achat : premium, prix modéré ou petit budget.</p><div className="cta-row"><Link href="#shopping" className="button button-coral">Voir les 3 styles</Link><Link href="#motion" className="button button-ghost">Comment ça marche</Link></div><div className="color-signals"><span>VRAIS PRODUITS</span><span>PRIX</span><span>TRY-ON</span><span>SHOPPING</span></div></div><div className="hero-visual"><div className="hero-sun"/><TryOnDemo/><div className="hero-sticker">3<br/>BUDGETS</div></div></section>
 
@@ -35,6 +36,6 @@ export default function HomePage() {
 
     <section id="commencer" className="final-cta"><div className="final-orb final-orb-one"/><div className="final-orb final-orb-two"/><div className="section-shell final-cta-inner"><p className="eyebrow">LOOK&GO</p><h2>Votre look.<br/><em>Votre budget.</em></h2><p>Commencez par votre profil. Look&Go s’occupe de réduire les choix.</p><Link href="/connexion?mode=register" className="button button-light">Créer mon dressing privé</Link><span>Les achats réels seront activés marchand par marchand après connexion des catalogues autorisés.</span></div></section>
 
-    <footer className="site-footer section-shell"><div><div className="wordmark footer-wordmark">LOOK&GO</div><p>Your style. Your fit. Your choice.</p></div><nav><Link href="#shopping">3 budgets</Link><Link href="#try-on">Try-On</Link><Link href="#offres">Offres</Link><Link href="/connexion">Connexion</Link></nav><p className="footer-note">Look&Go distingue explicitement les démonstrations UI des fonctionnalités connectées. Aucun partenariat, prix, stock ou commission d’affiliation n’est inventé.</p></footer>
+    <footer className="site-footer section-shell"><div><Image src="/lookgo-logo.svg" alt="Look&Go" width={720} height={180} className="footer-brand-logo"/><p>Your style. Your fit. Your choice.</p></div><nav><Link href="#shopping">3 budgets</Link><Link href="#try-on">Try-On</Link><Link href="#offres">Offres</Link><Link href="/connexion">Connexion</Link></nav><p className="footer-note">Look&Go distingue explicitement les démonstrations UI des fonctionnalités connectées. Aucun partenariat, prix, stock ou commission d’affiliation n’est inventé.</p></footer>
   </main>;
 }
