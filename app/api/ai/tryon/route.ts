@@ -13,7 +13,7 @@ function tierDirection(tier:string){
 
 export async function POST(request:Request){
   if(!process.env.OPENAI_API_KEY){
-    return NextResponse.json({error:"Le moteur OpenAI n'est pas encore configuré sur le serveur."},{status:503});
+    return NextResponse.json({error:"Le moteur IA n'est pas encore configuré sur le serveur."},{status:503});
   }
 
   try{
@@ -49,7 +49,6 @@ export async function POST(request:Request){
     body.append("prompt",prompt);
     body.append("size","1024x1536");
     body.append("quality","medium");
-    body.append("input_fidelity","high");
     body.append("image[]",portrait,portrait.name||"portrait.jpg");
     body.append("image[]",fullBody,fullBody.name||"full-body.jpg");
 
@@ -58,16 +57,17 @@ export async function POST(request:Request){
       headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`},
       body,
     });
-    const data=await response.json();
+    const data=await response.json().catch(()=>({}));
     if(!response.ok){
-      console.error("OpenAI image edit failed",response.status,data?.error?.message||data);
-      return NextResponse.json({error:"La génération IA a échoué. Réessayez dans quelques instants."},{status:502});
+      const providerMessage=String(data?.error?.message||"");
+      console.error("OpenAI image edit failed",response.status,providerMessage||data);
+      return NextResponse.json({error:providerMessage?`Génération refusée par le moteur IA : ${providerMessage}`:"La génération IA a échoué. Réessayez dans quelques instants."},{status:502});
     }
 
     const item=data?.data?.[0];
     if(item?.b64_json) return NextResponse.json({image:`data:image/png;base64,${item.b64_json}`,tier,model:"gpt-image-2"});
     if(item?.url) return NextResponse.json({image:item.url,tier,model:"gpt-image-2"});
-    return NextResponse.json({error:"OpenAI n'a retourné aucune image."},{status:502});
+    return NextResponse.json({error:"Le moteur IA n'a retourné aucune image."},{status:502});
   }catch(error){
     console.error("Try-On route error",error);
     return NextResponse.json({error:"Erreur serveur pendant la génération IA."},{status:500});
