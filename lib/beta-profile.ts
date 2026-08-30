@@ -1,4 +1,4 @@
-export type BetaProfile={email?:string;pseudo?:string;height?:number;weight?:number;age?:number;hair?:string;portraitName?:string;fullName?:string;styles?:string[];topSize?:string;bottomSize?:string;shoeSize?:string;likedColors?:string[];avoidColors?:string[];brands?:string[];budget?:number;budgetMode?:string;avoidBrands?:string;complete?:boolean};
+export type BetaProfile={email?:string;pseudo?:string;height?:number;weight?:number;age?:number;hair?:string;portraitName?:string;fullName?:string;styles?:string[];garmentTypes?:string[];occasions?:string[];topSize?:string;bottomSize?:string;shoeSize?:string;likedColors?:string[];avoidColors?:string[];brands?:string[];budget?:number;budgetMode?:string;avoidBrands?:string;complete?:boolean};
 
 const KEY="lookgo_beta_profile_v1";
 
