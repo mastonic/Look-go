@@ -4,17 +4,17 @@ import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, server
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { EmailAuthProvider, isSignInWithEmailLink, linkWithCredential, sendSignInLinkToEmail, signInAnonymously, signInWithEmailAndPassword, signInWithEmailLink, signOut, updatePassword, type User } from "firebase/auth";
 import { getLookGoFirebase } from "@/lib/firebase-client";
+import { sanitizeBetaProfileForCloud, validBetaAccessCode } from "@/lib/beta-access-policy";
 import type { BetaProfile } from "@/lib/beta-profile";
 import type { BetaMediaKey } from "@/lib/beta-media";
+
+export { validBetaAccessCode } from "@/lib/beta-access-policy";
 
 const EMAIL_KEY="lookgo_beta_email_link";
 
 async function cloudUser():Promise<User|null>{const fb=getLookGoFirebase();if(!fb)return null;if(fb.auth.currentUser)return fb.auth.currentUser;try{return (await signInAnonymously(fb.auth)).user}catch{return null}}
 
-function cloudProfile(profile:BetaProfile):BetaProfile{
- const {codeConfigured:_legacyAccessIndicator,...safe}=profile;
- return safe;
-}
+function cloudProfile(profile:BetaProfile):BetaProfile{return sanitizeBetaProfileForCloud(profile as Record<string,unknown>) as BetaProfile}
 
 function codeError(error:unknown){
  const value=String((error as {code?:string})?.code||"");
@@ -26,8 +26,6 @@ function codeError(error:unknown){
  if(value.includes("requires-recent-login"))return "Reconnectez-vous avec votre code actuel avant de le modifier.";
  return "Impossible de configurer le code personnel pour le moment.";
 }
-
-export function validBetaAccessCode(code:string){return /^\d{6}$/.test(code)}
 
 export async function createOrUpdateBetaAccessCode(email:string,code:string):Promise<{ok:boolean;error?:string}>{
  const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
