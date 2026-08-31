@@ -4,82 +4,17 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readBetaProfile, saveBetaProfile, type BetaProfile } from "@/lib/beta-profile";
-import { readBetaProfileCloud, saveBetaProfileCloud } from "@/lib/firebase-beta";
+import { betaAuthStatus, readBetaProfileCloud, requestBetaEmailLink, saveBetaProfileCloud } from "@/lib/firebase-beta";
 import "./auth.css";
 
-function hasIdentity(profile:BetaProfile){
-  return Boolean(profile.email || profile.pseudo);
-}
-
-function nextBetaPath(profile:BetaProfile){
-  if(profile.complete) return "/profil";
-  const identityReady=Boolean(
-    profile.email &&
-    profile.pseudo &&
-    profile.height &&
-    profile.weight &&
-    profile.age &&
-    profile.portraitName &&
-    profile.fullName
-  );
-  return identityReady ? "/inscription/style" : "/inscription";
-}
+function hasIdentity(profile:BetaProfile){return Boolean(profile.email||profile.pseudo)}
+function nextBetaPath(profile:BetaProfile){if(profile.complete)return "/profil";const ready=Boolean(profile.email&&profile.pseudo&&profile.height&&profile.weight&&profile.age&&profile.portraitName&&profile.fullName);return ready?"/inscription/style":"/inscription"}
 
 export default function ConnexionPage(){
-  const router=useRouter();
-  const [error,setError]=useState("");
-  const [checking,setChecking]=useState(true);
-
-  useEffect(()=>{
-    let alive=true;
-    (async()=>{
-      const local=readBetaProfile();
-      let cloud:BetaProfile|null=null;
-      try{cloud=await readBetaProfileCloud();}catch{}
-      if(!alive)return;
-      const merged={...(cloud||{}),...local};
-      if(hasIdentity(merged)){
-        saveBetaProfile(merged);
-        router.replace(nextBetaPath(merged));
-        return;
-      }
-      setChecking(false);
-    })();
-    return()=>{alive=false};
-  },[router]);
-
-  async function startBeta(e:FormEvent<HTMLFormElement>){
-    e.preventDefault();
-    setError("");
-    const fd=new FormData(e.currentTarget);
-    const email=String(fd.get("email")||"").trim();
-    const name=String(fd.get("name")||"").trim();
-    if(!name){setError("Entrez votre prénom ou pseudo.");return;}
-    if(!email || !email.includes("@")){setError("Entrez une adresse email valide.");return;}
-    const profile={email,pseudo:name,complete:false};
-    saveBetaProfile(profile);
-    try{await saveBetaProfileCloud(profile);}catch{}
-    window.location.href="/inscription";
-  }
-
-  if(checking){
-    return <main className="auth-page"><section className="auth-shell"><div className="auth-panel"><p className="auth-privacy">Recherche de votre espace Look&Go…</p></div></section></main>;
-  }
-
-  return <main className="auth-page">
-    <header className="auth-header"><Link href="/" className="auth-logo">LOOK&GO</Link><Link href="/">Retour au site</Link></header>
-    <section className="auth-shell">
-      <div className="auth-story"><p>BÊTA PRIVÉE LOOK&GO</p><h1>Testez votre <em>premier look.</em></h1><span>Créez votre profil une seule fois. À votre retour, Look&Go vous ramènera automatiquement dans votre espace ou à l’étape où vous vous êtes arrêté.</span></div>
-      <div className="auth-panel">
-        <div className="auth-tabs"><button className="active" type="button">Nouvel accès bêta</button></div>
-        <form onSubmit={startBeta}>
-          <label>Prénom ou pseudo<input name="name" required minLength={2} placeholder="Votre prénom ou pseudo" autoComplete="nickname"/></label>
-          <label>Email<input name="email" type="email" required autoComplete="email" placeholder="vous@exemple.fr"/></label>
-          {error&&<div className="auth-error">{error}</div>}
-          <button className="auth-submit" type="submit">Démarrer mon test →</button>
-        </form>
-        <p className="auth-privacy">Votre progression est conservée localement et synchronisée avec Firebase lorsque le service cloud est configuré. Un compte durable sera utilisé pour retrouver le même espace sur plusieurs appareils.</p>
-      </div>
-    </section>
-  </main>;
+ const router=useRouter();const [error,setError]=useState("");const [checking,setChecking]=useState(true);const [mode,setMode]=useState<"new"|"return">("new");const [sent,setSent]=useState("");const [working,setWorking]=useState(false);
+ useEffect(()=>{let alive=true;(async()=>{const local=readBetaProfile();let cloud:BetaProfile|null=null;try{cloud=await readBetaProfileCloud();}catch{}if(!alive)return;const merged={...(cloud||{}),...local};const auth=await betaAuthStatus();if(hasIdentity(merged)&&(auth.durable||Object.keys(local).length>0)){saveBetaProfile(merged);router.replace(nextBetaPath(merged));return;}setChecking(false);})();return()=>{alive=false};},[router]);
+ async function startBeta(e:FormEvent<HTMLFormElement>){e.preventDefault();setError("");setWorking(true);const fd=new FormData(e.currentTarget);const email=String(fd.get("email")||"").trim().toLowerCase();const name=String(fd.get("name")||"").trim();if(!name){setError("Entrez votre prénom ou pseudo.");setWorking(false);return}if(!email.includes("@")){setError("Entrez une adresse email valide.");setWorking(false);return}const profile={email,pseudo:name,complete:false};saveBetaProfile(profile);await saveBetaProfileCloud(profile);void requestBetaEmailLink(email);router.push("/inscription")}
+ async function recover(e:FormEvent<HTMLFormElement>){e.preventDefault();setError("");setWorking(true);const email=String(new FormData(e.currentTarget).get("email")||"").trim().toLowerCase();if(!email.includes("@")){setError("Entrez l’email utilisé pour Look&Go.");setWorking(false);return}const ok=await requestBetaEmailLink(email);setWorking(false);if(!ok){setError("Impossible d’envoyer le lien de connexion. Vérifiez la configuration Firebase puis réessayez.");return}setSent(email)}
+ if(checking)return <main className="auth-page"><section className="auth-shell"><div className="auth-panel"><p className="auth-privacy">Recherche de votre espace Look&Go…</p></div></section></main>;
+ return <main className="auth-page"><header className="auth-header"><Link href="/" className="auth-logo">LOOK&GO</Link><Link href="/">Retour au site</Link></header><section className="auth-shell"><div className="auth-story"><p>BÊTA PRIVÉE LOOK&GO</p><h1>Votre dressing <em>vous reconnaît.</em></h1><span>Votre profil est créé une seule fois. Le lien email permet ensuite de retrouver le même espace, les photos et l’historique sur un autre appareil.</span></div><div className="auth-panel"><div className="auth-tabs"><button className={mode==="new"?"active":""} type="button" onClick={()=>{setMode("new");setError("");setSent("")}}>Nouvel accès</button><button className={mode==="return"?"active":""} type="button" onClick={()=>{setMode("return");setError("");setSent("")}}>Retrouver mon espace</button></div>{sent?<><p className="auth-privacy">Un lien sécurisé a été envoyé à <strong>{sent}</strong>. Ouvrez-le sur cet appareil ou un autre pour retrouver votre espace Look&Go.</p><button className="auth-submit" type="button" onClick={()=>setSent("")}>Renvoyer / changer d’email</button></>:mode==="new"?<form onSubmit={startBeta}><label>Prénom ou pseudo<input name="name" required minLength={2} placeholder="Votre prénom ou pseudo" autoComplete="nickname"/></label><label>Email<input name="email" type="email" required autoComplete="email" placeholder="vous@exemple.fr"/></label>{error&&<div className="auth-error">{error}</div>}<button className="auth-submit" type="submit" disabled={working}>{working?"Création…":"Démarrer mon test →"}</button></form>:<form onSubmit={recover}><label>Email utilisé sur Look&Go<input name="email" type="email" required autoComplete="email" placeholder="vous@exemple.fr"/></label>{error&&<div className="auth-error">{error}</div>}<button className="auth-submit" type="submit" disabled={working}>{working?"Envoi…":"Recevoir mon lien sécurisé →"}</button></form>}<p className="auth-privacy">Sur cet appareil, Look&Go reprend aussi automatiquement une session déjà enregistrée.</p></div></section></main>;
 }
