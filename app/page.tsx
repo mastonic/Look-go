@@ -4,6 +4,7 @@ import "./lookgo-v2-fixes.css";
 import "./lookgo-v3-overrides.css";
 import "./lookgo-reference-hero.css";
 import "./lookgo-v4-experience.css";
+import "./lookgo-v5-mobile-polish.css";
 
 export default function HomePage(){
   return <LookGoLandingV2/>;
