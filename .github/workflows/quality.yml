@@ -1,12 +1,10 @@
 name: LookGo Quality Gate
 
 on:
-  push:
-    branches:
-      - feat/beta-production-dressing-private
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
