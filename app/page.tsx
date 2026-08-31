@@ -1,7 +1,6 @@
-import { LookGoLanding } from "@/components/landing/LookGoLanding";
-import "./lookgo-2026.css";
-import "./lookgo-motion-icons.css";
+import { LookGoLandingV2 } from "@/components/landing/LookGoLandingV2";
+import "./lookgo-v2.css";
 
 export default function HomePage(){
-  return <LookGoLanding/>;
+  return <LookGoLandingV2/>;
 }
