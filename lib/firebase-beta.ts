@@ -11,6 +11,11 @@ const EMAIL_KEY="lookgo_beta_email_link";
 
 async function cloudUser():Promise<User|null>{const fb=getLookGoFirebase();if(!fb)return null;if(fb.auth.currentUser)return fb.auth.currentUser;try{return (await signInAnonymously(fb.auth)).user}catch{return null}}
 
+function cloudProfile(profile:BetaProfile):BetaProfile{
+ const {codeConfigured:_legacyAccessIndicator,...safe}=profile;
+ return safe;
+}
+
 function codeError(error:unknown){
  const value=String((error as {code?:string})?.code||"");
  if(value.includes("email-already-in-use"))return "Cet email possède déjà un espace Look&Go. Utilisez « Retrouver mon espace ».";
@@ -47,9 +52,11 @@ export async function signInBetaWithCode(email:string,code:string):Promise<{ok:b
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
  try{
   const credential=await signInWithEmailAndPassword(fb.auth,normalized,code);
-  const snap=await getDoc(doc(fb.db,"users",credential.user.uid));
+  const userRef=doc(fb.db,"users",credential.user.uid);
+  const snap=await getDoc(userRef);
   const profile=snap.exists()?((snap.data().profile||null) as BetaProfile|null):null;
-  return {ok:true,profile};
+  await setDoc(userRef,{accessCodeEnabled:true,updatedAt:serverTimestamp(),beta:true},{merge:true});
+  return {ok:true,profile:profile?cloudProfile(profile):null};
  }catch(error){return {ok:false,error:codeError(error)}}
 }
 
@@ -60,8 +67,8 @@ export async function finishBetaEmailLink(email:string,url?:string){const fb=get
 export async function betaAuthStatus(){const fb=getLookGoFirebase();if(!fb)return {ready:false,durable:false,email:"",accessCodeEnabled:false};const user=await cloudUser();if(!user)return {ready:false,durable:false,email:"",accessCodeEnabled:false};let accessCodeEnabled=false;try{const snap=await getDoc(doc(fb.db,"users",user.uid));accessCodeEnabled=Boolean(snap.exists()&&snap.data().accessCodeEnabled)}catch{}return {ready:true,durable:!user.isAnonymous,email:user.email||"",accessCodeEnabled}}
 export async function signOutBetaCloud(){const fb=getLookGoFirebase();if(!fb)return;try{await signOut(fb.auth)}catch{}if(typeof window!=="undefined")localStorage.removeItem(EMAIL_KEY)}
 
-export async function saveBetaProfileCloud(profile:BetaProfile){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return false;try{await setDoc(doc(fb.db,"users",user.uid),{profile,updatedAt:serverTimestamp(),beta:true},{merge:true});return true}catch{return false}}
-export async function readBetaProfileCloud():Promise<BetaProfile|null>{const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const snap=await getDoc(doc(fb.db,"users",user.uid));return snap.exists()?((snap.data().profile||null) as BetaProfile|null):null}catch{return null}}
+export async function saveBetaProfileCloud(profile:BetaProfile){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return false;try{await setDoc(doc(fb.db,"users",user.uid),{profile:cloudProfile(profile),updatedAt:serverTimestamp(),beta:true},{merge:true});return true}catch{return false}}
+export async function readBetaProfileCloud():Promise<BetaProfile|null>{const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const snap=await getDoc(doc(fb.db,"users",user.uid));const profile=snap.exists()?((snap.data().profile||null) as BetaProfile|null):null;return profile?cloudProfile(profile):null}catch{return null}}
 
 export async function uploadBetaMediaCloud(key:BetaMediaKey,file:Blob,fileName?:string){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const safe=(fileName||key).replace(/[^a-zA-Z0-9._-]/g,"_");const folder=key.startsWith("video")?"runways":key.startsWith("tryon")?"tryons":"reference";const objectRef=ref(fb.storage,`users/${user.uid}/${folder}/${key}-${Date.now()}-${safe}`);await uploadBytes(objectRef,file,{contentType:file.type||"application/octet-stream"});const url=await getDownloadURL(objectRef);const userRef=doc(fb.db,"users",user.uid);await setDoc(userRef,{updatedAt:serverTimestamp(),beta:true},{merge:true});await updateDoc(userRef,{[`media.${key}`]:{url,name:fileName||safe,updatedAt:new Date().toISOString(),type:file.type||"application/octet-stream"}});return url}catch{return null}}
 export async function readBetaMediaCloud(key:BetaMediaKey):Promise<{blob:Blob;name:string;url:string}|null>{const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const snap=await getDoc(doc(fb.db,"users",user.uid));if(!snap.exists())return null;const media=snap.data().media as Record<string,{url?:string;name?:string}>|undefined;const item=media?.[key];if(!item?.url)return null;const response=await fetch(item.url,{cache:"no-store"});if(!response.ok)return null;return {blob:await response.blob(),name:item.name||key,url:item.url}}catch{return null}}
