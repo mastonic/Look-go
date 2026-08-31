@@ -17,7 +17,7 @@ function codeError(error:unknown){
  if(value.includes("invalid-credential")||value.includes("wrong-password")||value.includes("user-not-found"))return "Email ou code personnel incorrect.";
  if(value.includes("weak-password"))return "Le code doit contenir exactement 6 chiffres.";
  if(value.includes("too-many-requests"))return "Trop de tentatives. Attendez quelques minutes puis réessayez.";
- if(value.includes("operation-not-allowed"))return "La connexion par code n’est pas encore activée dans Firebase.";
+ if(value.includes("operation-not-allowed"))return "La connexion par code n’est pas encore disponible. Réessayez dans quelques instants.";
  if(value.includes("requires-recent-login"))return "Reconnectez-vous avec votre code actuel avant de le modifier.";
  return "Impossible de configurer le code personnel pour le moment.";
 }
@@ -25,7 +25,7 @@ function codeError(error:unknown){
 export function validBetaAccessCode(code:string){return /^\d{6}$/.test(code)}
 
 export async function createOrUpdateBetaAccessCode(email:string,code:string):Promise<{ok:boolean;error?:string}>{
- const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Firebase n’est pas configuré."};
+ const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@"))return {ok:false,error:"Adresse email invalide."};
  if(!validBetaAccessCode(code))return {ok:false,error:"Choisissez un code personnel de 6 chiffres."};
  try{
@@ -43,7 +43,7 @@ export async function createOrUpdateBetaAccessCode(email:string,code:string):Pro
 }
 
 export async function signInBetaWithCode(email:string,code:string):Promise<{ok:boolean;profile?:BetaProfile|null;error?:string}>{
- const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Firebase n’est pas configuré."};
+ const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
  try{
   const credential=await signInWithEmailAndPassword(fb.auth,normalized,code);
