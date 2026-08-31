@@ -1,1 +1,0 @@
-Landing CTAs that currently point to `/connexion?mode=register` remain compatible with returning beta testers because `/connexion` now restores the existing profile before rendering the registration form. New CTAs should prefer `/start`, which is the canonical smart entry route.
