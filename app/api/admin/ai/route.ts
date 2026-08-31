@@ -18,6 +18,30 @@ export async function GET(request:Request){
  return NextResponse.json({providers:providerConfig().map(({id,label,enabled,configured,capabilities})=>({id,label,enabled,configured,capabilities})),canManage:Boolean(process.env.VERCEL_TOKEN)});
 }
 
+async function testProvider(provider:AiProviderId){
+ const key=process.env[PROVIDER_ENV[provider]];
+ if(!key)throw new Error("Clé API manquante sur le serveur.");
+ if(provider==="google"){
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,{cache:"no-store"});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(String(d?.error?.message||"Connexion Google AI refusée."));
+  return "Connexion Google AI valide.";
+ }
+ if(provider==="openai"){
+  const r=await fetch("https://api.openai.com/v1/models",{headers:{Authorization:`Bearer ${key}`},cache:"no-store"});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(String(d?.error?.message||"Connexion OpenAI refusée."));
+  return "Connexion OpenAI valide.";
+ }
+ if(provider==="anthropic"){
+  const r=await fetch("https://api.anthropic.com/v1/models",{headers:{"x-api-key":key,"anthropic-version":"2023-06-01"},cache:"no-store"});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(String(d?.error?.message||"Connexion Claude refusée."));
+  return "Connexion Claude valide.";
+ }
+ throw new Error("Test automatique Higgsfield à brancher avec le connecteur de génération.");
+}
+
 async function upsertEnv(items:{key:string;value:string;type:"plain"|"sensitive"}[]){
  const response=await fetch(`https://api.vercel.com/v10/projects/${PROJECT_ID}/env?upsert=true&teamId=${TEAM_ID}`,{method:"POST",headers:vercelHeaders(),body:JSON.stringify(items.map(item=>({...item,target:["production","preview"]})))});
  const body=await response.json().catch(()=>({}));
@@ -37,10 +61,13 @@ async function redeploy(){
 
 export async function POST(request:Request){
  if(!isAdmin(request))return NextResponse.json({error:"Accès refusé."},{status:403});
- if(!process.env.VERCEL_TOKEN)return NextResponse.json({error:"Gestion distante non configurée : ajoutez VERCEL_TOKEN une seule fois dans Vercel."},{status:503});
- const body=await request.json().catch(()=>null) as {provider?:AiProviderId;enabled?:boolean;apiKey?:string}|null;
+ const body=await request.json().catch(()=>null) as {provider?:AiProviderId;enabled?:boolean;apiKey?:string;action?:"save"|"test"}|null;
  const provider=body?.provider;
  if(!provider||!(provider in PROVIDER_ENV))return NextResponse.json({error:"Moteur invalide."},{status:400});
+ if(body?.action==="test"){
+  try{return NextResponse.json({ok:true,message:await testProvider(provider)});}catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Connexion impossible."},{status:502});}
+ }
+ if(!process.env.VERCEL_TOKEN)return NextResponse.json({error:"Gestion distante non configurée : ajoutez VERCEL_TOKEN une seule fois dans Vercel."},{status:503});
  if(typeof body?.enabled!=="boolean")return NextResponse.json({error:"État du moteur invalide."},{status:400});
  const apiKey=String(body?.apiKey||"").trim();
  const updates:{key:string;value:string;type:"plain"|"sensitive"}[]=[{key:enabledEnv(provider),value:body.enabled?"true":"false",type:"plain"}];
