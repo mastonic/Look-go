@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
+import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
 
 const serif = Cormorant_Garamond({
@@ -19,8 +20,16 @@ export const metadata: Metadata = {
   title: "Look&Go — Votre dressing. Votre style. Avant même de l'essayer.",
   description:
     "Look&Go vous aide à composer votre dressing, découvrir des looks personnalisés et visualiser des tenues sur vous avant de choisir.",
-  metadataBase: new URL("https://look-and-go.tontonmasto.chatgpt.site"),
+  metadataBase: new URL("https://look-go.vercel.app"),
   alternates: { canonical: "/" },
+  manifest: "/manifest.webmanifest",
+  applicationName: "Look&Go",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Look&Go",
+  },
+  formatDetection: { telephone: false },
   openGraph: {
     title: "Look&Go — Votre dressing privé digital",
     description:
@@ -39,13 +48,21 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f4f0e8",
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fff9f1" },
+    { media: "(prefers-color-scheme: dark)", color: "#111111" },
+  ],
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr" className={`${serif.variable} ${sans.variable}`}>
-      <body>{children}</body>
+      <body>
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }
