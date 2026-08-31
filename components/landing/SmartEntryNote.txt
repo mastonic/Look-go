@@ -1,1 +1,0 @@
-Returning beta testers are now intercepted by /connexion and resumed automatically. Prefer /start for future scanner CTAs.
