@@ -2,15 +2,47 @@
 
 import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { signInAnonymously, type User } from "firebase/auth";
+import { EmailAuthProvider, isSignInWithEmailLink, linkWithCredential, sendSignInLinkToEmail, signInAnonymously, signInWithEmailLink, type User } from "firebase/auth";
 import { getLookGoFirebase } from "@/lib/firebase-client";
 import type { BetaProfile } from "@/lib/beta-profile";
 import type { BetaMediaKey } from "@/lib/beta-media";
+
+const EMAIL_KEY="lookgo_beta_email_link";
 
 async function cloudUser():Promise<User|null>{
  const fb=getLookGoFirebase();if(!fb)return null;
  if(fb.auth.currentUser)return fb.auth.currentUser;
  try{return (await signInAnonymously(fb.auth)).user}catch{return null}
+}
+
+export async function requestBetaEmailLink(email:string){
+ const fb=getLookGoFirebase();if(!fb||typeof window==="undefined")return false;
+ try{
+  await sendSignInLinkToEmail(fb.auth,email,{url:`${window.location.origin}/auth/finish`,handleCodeInApp:true});
+  localStorage.setItem(EMAIL_KEY,email);
+  return true;
+ }catch{return false}
+}
+
+export function storedBetaEmail(){if(typeof window==="undefined")return "";return localStorage.getItem(EMAIL_KEY)||""}
+export function isBetaEmailLink(url?:string){const fb=getLookGoFirebase();if(!fb||typeof window==="undefined")return false;return isSignInWithEmailLink(fb.auth,url||window.location.href)}
+
+export async function finishBetaEmailLink(email:string,url?:string){
+ const fb=getLookGoFirebase();if(!fb||typeof window==="undefined")return false;
+ const href=url||window.location.href;if(!isSignInWithEmailLink(fb.auth,href))return false;
+ try{
+  const current=fb.auth.currentUser;
+  if(current?.isAnonymous){
+   try{const credential=EmailAuthProvider.credentialWithLink(email,href);await linkWithCredential(current,credential);}catch{await signInWithEmailLink(fb.auth,email,href);}
+  }else await signInWithEmailLink(fb.auth,email,href);
+  localStorage.setItem(EMAIL_KEY,email);
+  return true;
+ }catch{return false}
+}
+
+export async function betaAuthStatus(){
+ const fb=getLookGoFirebase();if(!fb)return {ready:false,durable:false,email:""};
+ const user=await cloudUser();return {ready:Boolean(user),durable:Boolean(user&&!user.isAnonymous),email:user?.email||""};
 }
 
 export async function saveBetaProfileCloud(profile:BetaProfile){
@@ -50,7 +82,7 @@ export async function readBetaMediaCloud(key:BetaMediaKey):Promise<{blob:Blob;na
  }catch{return null}
 }
 
-export async function saveBetaHistoryCloud(kind:"tryon"|"runway"|"profile",payload:Record<string,unknown>){
+export async function saveBetaHistoryCloud(kind:"tryon"|"runway"|"profile"|"event",payload:Record<string,unknown>){
  const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return false;
  try{await addDoc(collection(fb.db,"users",user.uid,"history"),{kind,...payload,createdAt:serverTimestamp()});return true}catch{return false}
 }
