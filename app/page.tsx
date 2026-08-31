@@ -6,6 +6,7 @@ import "./lookgo-reference-hero.css";
 import "./lookgo-v4-experience.css";
 import "./lookgo-v5-mobile-polish.css";
 import "./lookgo-v6-final-polish.css";
+import "./lookgo-v6-approved-hero.css";
 
 export default function HomePage(){
   return <LookGoLandingV2/>;
