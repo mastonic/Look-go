@@ -11,43 +11,58 @@ const EMAIL_KEY="lookgo_beta_email_link";
 
 async function cloudUser():Promise<User|null>{const fb=getLookGoFirebase();if(!fb)return null;if(fb.auth.currentUser)return fb.auth.currentUser;try{return (await signInAnonymously(fb.auth)).user}catch{return null}}
 
+function authErrorCode(error:unknown){return String((error as {code?:string})?.code||"")}
+function accessCodePassword(code:string){return `LookGo-Beta#${code}-Access!2026Aa`}
+function retryableCodeError(error:unknown){const value=authErrorCode(error);return value.includes("operation-not-allowed")||value.includes("admin-restricted-operation")||value.includes("network-request-failed")||value.includes("internal-error")||value.includes("timeout")||value.includes("password-does-not-meet-requirements")||value.includes("weak-password")}
 function codeError(error:unknown){
- const value=String((error as {code?:string})?.code||"");
- if(value.includes("email-already-in-use"))return "Cet email possède déjà un espace Look&Go. Utilisez « Retrouver mon espace ».";
+ const value=authErrorCode(error);
+ if(value.includes("email-already-in-use")||value.includes("credential-already-in-use"))return "Cet email possède déjà un espace Look&Go. Utilisez « Retrouver mon espace ».";
  if(value.includes("invalid-credential")||value.includes("wrong-password")||value.includes("user-not-found"))return "Email ou code personnel incorrect.";
- if(value.includes("weak-password"))return "Le code doit contenir exactement 6 chiffres.";
+ if(value.includes("password-does-not-meet-requirements")||value.includes("weak-password"))return "Le service de code personnel est en cours de sécurisation. Votre inscription peut continuer et le code pourra être activé depuis votre profil.";
  if(value.includes("too-many-requests"))return "Trop de tentatives. Attendez quelques minutes puis réessayez.";
- if(value.includes("operation-not-allowed"))return "La connexion par code n’est pas encore disponible. Réessayez dans quelques instants.";
+ if(value.includes("operation-not-allowed")||value.includes("admin-restricted-operation"))return "Le code personnel est temporairement indisponible. Votre inscription peut continuer et vous pourrez l’activer ensuite depuis votre profil.";
  if(value.includes("requires-recent-login"))return "Reconnectez-vous avec votre code actuel avant de le modifier.";
+ if(value.includes("network-request-failed")||value.includes("internal-error")||value.includes("timeout"))return "Connexion momentanément instable. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.";
  return "Impossible de configurer le code personnel pour le moment.";
 }
 
 export function validBetaAccessCode(code:string){return /^\d{6}$/.test(code)}
 
-export async function createOrUpdateBetaAccessCode(email:string,code:string):Promise<{ok:boolean;error?:string}>{
- const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
+export async function createOrUpdateBetaAccessCode(email:string,code:string):Promise<{ok:boolean;error?:string;retryable?:boolean}>{
+ const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.",retryable:true};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@"))return {ok:false,error:"Adresse email invalide."};
  if(!validBetaAccessCode(code))return {ok:false,error:"Choisissez un code personnel de 6 chiffres."};
  try{
-  const user=await cloudUser();if(!user)return {ok:false,error:"Session Look&Go introuvable."};
+  const user=await cloudUser();if(!user)return {ok:false,error:"Session Look&Go introuvable.",retryable:true};
+  const password=accessCodePassword(code);
   if(user.isAnonymous){
-   const credential=EmailAuthProvider.credential(normalized,code);
+   const credential=EmailAuthProvider.credential(normalized,password);
    await linkWithCredential(user,credential);
   }else{
    if(user.email&&user.email.toLowerCase()!==normalized)return {ok:false,error:"L’email ne correspond pas à votre espace connecté."};
-   await updatePassword(user,code);
+   await updatePassword(user,password);
   }
   await setDoc(doc(fb.db,"users",user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true});
   return {ok:true};
- }catch(error){return {ok:false,error:codeError(error)}}
+ }catch(error){return {ok:false,error:codeError(error),retryable:retryableCodeError(error)}}
 }
 
 export async function signInBetaWithCode(email:string,code:string):Promise<{ok:boolean;profile?:BetaProfile|null;error?:string}>{
  const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
  try{
-  const credential=await signInWithEmailAndPassword(fb.auth,normalized,code);
+  let credential;
+  try{
+   credential=await signInWithEmailAndPassword(fb.auth,normalized,accessCodePassword(code));
+  }catch(primaryError){
+   const primaryCode=authErrorCode(primaryError);
+   const legacyCandidate=primaryCode.includes("invalid-credential")||primaryCode.includes("wrong-password")||primaryCode.includes("user-not-found");
+   if(!legacyCandidate)throw primaryError;
+   credential=await signInWithEmailAndPassword(fb.auth,normalized,code);
+   try{await updatePassword(credential.user,accessCodePassword(code))}catch{}
+  }
   const snap=await getDoc(doc(fb.db,"users",credential.user.uid));
+  if(snap.exists()&&!snap.data().accessCodeEnabled){try{await setDoc(doc(fb.db,"users",credential.user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true})}catch{}}
   const profile=snap.exists()?((snap.data().profile||null) as BetaProfile|null):null;
   return {ok:true,profile};
  }catch(error){return {ok:false,error:codeError(error)}}
