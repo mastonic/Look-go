@@ -5,11 +5,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readBetaProfile, saveBetaProfile, type BetaProfile } from "@/lib/beta-profile";
 import { betaAuthStatus, createOrUpdateBetaAccessCode, readBetaProfileCloud, saveBetaProfileCloud, signInBetaWithCode } from "@/lib/firebase-beta";
+import { firebaseConfigStatus } from "@/lib/firebase-client";
 import "./auth.css";
 
 function hasIdentity(profile:BetaProfile){return Boolean(profile.email||profile.pseudo)}
 function nextBetaPath(profile:BetaProfile){if(profile.complete)return "/profil";const ready=Boolean(profile.email&&profile.pseudo&&profile.height&&profile.weight&&profile.age&&profile.portraitName&&profile.fullName);return ready?"/inscription/style":"/inscription"}
 function trace(event:string,detail:Record<string,unknown>={}){void fetch("/api/client-telemetry",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event,detail}),keepalive:true}).catch(()=>{});}
+function traceFirebaseConfig(){const status=firebaseConfigStatus();if(!status.ready)trace("firebase_client_config_missing",{missing:status.missing});return status;}
 
 export default function ConnexionPage(){
  const router=useRouter();const [error,setError]=useState("");const [checking,setChecking]=useState(true);const [mode,setMode]=useState<"new"|"return">("new");const [working,setWorking]=useState(false);
@@ -17,7 +19,7 @@ export default function ConnexionPage(){
  async function startBeta(e:FormEvent<HTMLFormElement>){
   e.preventDefault();setError("");setWorking(true);const fd=new FormData(e.currentTarget);const email=String(fd.get("email")||"").trim().toLowerCase();const name=String(fd.get("name")||"").trim();const code=String(fd.get("code")||"").trim();const confirm=String(fd.get("confirmCode")||"").trim();
   if(!name){setError("Entrez votre prénom ou pseudo.");setWorking(false);return}if(!email.includes("@")){setError("Entrez une adresse email valide.");setWorking(false);return}if(!/^\d{6}$/.test(code)){setError("Choisissez un code personnel de 6 chiffres.");setWorking(false);return}if(code!==confirm){setError("Les deux codes personnels ne correspondent pas.");setWorking(false);return}
-  trace("beta_access_creation_started");
+  trace("beta_access_creation_started");traceFirebaseConfig();
   const access=await createOrUpdateBetaAccessCode(email,code);
   if(!access.ok){setError(access.error||"Impossible de créer votre code personnel.");setWorking(false);trace("beta_access_creation_failed",{reason:access.error||"unknown"});return}
   const profile:BetaProfile={email,pseudo:name,complete:false,codeConfigured:true};saveBetaProfile(profile);const cloudOk=await saveBetaProfileCloud(profile);
@@ -25,7 +27,7 @@ export default function ConnexionPage(){
   trace("beta_access_creation_success");router.push("/inscription");
  }
  async function recover(e:FormEvent<HTMLFormElement>){
-  e.preventDefault();setError("");setWorking(true);const fd=new FormData(e.currentTarget);const email=String(fd.get("email")||"").trim().toLowerCase();const code=String(fd.get("code")||"").trim();trace("beta_access_recovery_started");
+  e.preventDefault();setError("");setWorking(true);const fd=new FormData(e.currentTarget);const email=String(fd.get("email")||"").trim().toLowerCase();const code=String(fd.get("code")||"").trim();trace("beta_access_recovery_started");traceFirebaseConfig();
   const result=await signInBetaWithCode(email,code);if(!result.ok){setError(result.error||"Connexion impossible.");setWorking(false);trace("beta_access_recovery_failed",{reason:result.error||"unknown"});return}
   if(!result.profile||!hasIdentity(result.profile)){setError("Votre accès est reconnu, mais votre profil n’a pas pu être restauré. Réessayez dans quelques instants.");setWorking(false);trace("beta_access_recovery_profile_missing");return}
   const profile={...result.profile,email,codeConfigured:true};saveBetaProfile(profile);setWorking(false);trace("beta_access_recovery_success",{complete:Boolean(profile.complete)});router.replace(nextBetaPath(profile));
