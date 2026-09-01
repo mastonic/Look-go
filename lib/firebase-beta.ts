@@ -1,7 +1,6 @@
 "use client";
 
 import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { EmailAuthProvider, isSignInWithEmailLink, linkWithCredential, sendSignInLinkToEmail, signInAnonymously, signInWithEmailAndPassword, signInWithEmailLink, signOut, updatePassword, type User, type UserCredential } from "firebase/auth";
 import { getLookGoFirebase } from "@/lib/firebase-client";
 import type { BetaProfile } from "@/lib/beta-profile";
@@ -25,6 +24,10 @@ function reportAccessCodeError(stage:string,error:unknown){
  if(typeof window==="undefined")return;
  const code=authErrorCode(error)||"unknown";
  void fetch("/api/client-telemetry",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event:"beta_access_code_error",detail:{stage,code}}),keepalive:true}).catch(()=>{});
+}
+function reportStorageError(stage:string,detail:Record<string,unknown>={}){
+ if(typeof window==="undefined")return;
+ void fetch("/api/client-telemetry",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event:"beta_storage_error",detail:{stage,...detail}}),keepalive:true}).catch(()=>{});
 }
 function codeError(error:unknown){
  const value=authErrorCode(error);
@@ -90,7 +93,6 @@ export async function createOrUpdateBetaAccessCode(email:string,code:string):Pro
   await setDoc(doc(fb.db,"users",user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true});
  }catch(error){
   reportAccessCodeError("metadata",error);
-  // The Firebase credential is already durable at this point. Do not block onboarding if metadata sync is temporarily unavailable.
  }
  return {ok:true};
 }
@@ -118,8 +120,36 @@ export async function signOutBetaCloud(){const fb=getLookGoFirebase();if(!fb)ret
 export async function saveBetaProfileCloud(profile:BetaProfile){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return false;try{await setDoc(doc(fb.db,"users",user.uid),{profile,updatedAt:serverTimestamp(),beta:true},{merge:true});return true}catch{return false}}
 export async function readBetaProfileCloud():Promise<BetaProfile|null>{const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const snap=await getDoc(doc(fb.db,"users",user.uid));return snap.exists()?((snap.data().profile||null) as BetaProfile|null):null}catch{return null}}
 
-export async function uploadBetaMediaCloud(key:BetaMediaKey,file:Blob,fileName?:string){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const safe=(fileName||key).replace(/[^a-zA-Z0-9._-]/g,"_");const folder=key.startsWith("video")?"runways":key.startsWith("tryon")?"tryons":"reference";const objectRef=ref(fb.storage,`users/${user.uid}/${folder}/${key}-${Date.now()}-${safe}`);await uploadBytes(objectRef,file,{contentType:file.type||"application/octet-stream"});const url=await getDownloadURL(objectRef);const userRef=doc(fb.db,"users",user.uid);await setDoc(userRef,{updatedAt:serverTimestamp(),beta:true},{merge:true});await updateDoc(userRef,{[`media.${key}`]:{url,name:fileName||safe,updatedAt:new Date().toISOString(),type:file.type||"application/octet-stream"}});return url}catch{return null}}
-export async function readBetaMediaCloud(key:BetaMediaKey):Promise<{blob:Blob;name:string;url:string}|null>{const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;try{const snap=await getDoc(doc(fb.db,"users",user.uid));if(!snap.exists())return null;const media=snap.data().media as Record<string,{url?:string;name?:string}>|undefined;const item=media?.[key];if(!item?.url)return null;const response=await fetch(item.url,{cache:"no-store"});if(!response.ok)return null;return {blob:await response.blob(),name:item.name||key,url:item.url}}catch{return null}}
+function storagePathFromUrl(value?:string){
+ if(!value)return "";
+ try{const parsed=new URL(value);if(parsed.hostname!=="firebasestorage.googleapis.com")return "";const marker="/o/";const index=parsed.pathname.indexOf(marker);if(index<0)return "";return decodeURIComponent(parsed.pathname.slice(index+marker.length))}catch{return ""}
+}
+
+export async function uploadBetaMediaCloud(key:BetaMediaKey,file:Blob,fileName?:string){
+ const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;
+ try{
+  const token=await user.getIdToken();const form=new FormData();form.append("file",file,fileName||key);form.append("key",key);form.append("uid",user.uid);form.append("fileName",fileName||key);
+  const response=await fetch("/api/storage/upload",{method:"POST",headers:{Authorization:`Bearer ${token}`},body:form,cache:"no-store"});
+  const data=await response.json().catch(()=>({})) as {path?:string;status?:number};
+  if(!response.ok||!data.path){reportStorageError("upload_proxy",{status:response.status,remoteStatus:data.status||null,key});return null}
+  const userRef=doc(fb.db,"users",user.uid);await setDoc(userRef,{updatedAt:serverTimestamp(),beta:true},{merge:true});
+  await updateDoc(userRef,{[`media.${key}`]:{path:data.path,name:fileName||key,updatedAt:new Date().toISOString(),type:file.type||"application/octet-stream"}});
+  return data.path;
+ }catch(error){reportStorageError("upload_proxy_exception",{key,message:error instanceof Error?error.message:"unknown"});return null}
+}
+
+export async function readBetaMediaCloud(key:BetaMediaKey):Promise<{blob:Blob;name:string;url:string}|null>{
+ const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return null;
+ try{
+  const snap=await getDoc(doc(fb.db,"users",user.uid));if(!snap.exists())return null;
+  const media=snap.data().media as Record<string,{path?:string;url?:string;name?:string}>|undefined;const item=media?.[key];if(!item)return null;
+  const path=item.path||storagePathFromUrl(item.url);if(!path)return null;
+  const token=await user.getIdToken();const proxyUrl=`/api/storage/download?path=${encodeURIComponent(path)}`;
+  const response=await fetch(proxyUrl,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"});
+  if(!response.ok){reportStorageError("download_proxy",{status:response.status,key});return null}
+  return {blob:await response.blob(),name:item.name||key,url:proxyUrl};
+ }catch(error){reportStorageError("download_proxy_exception",{key,message:error instanceof Error?error.message:"unknown"});return null}
+}
 
 export async function saveBetaHistoryCloud(kind:"tryon"|"runway"|"profile"|"event",payload:Record<string,unknown>){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return false;try{await addDoc(collection(fb.db,"users",user.uid,"history"),{kind,...payload,createdAt:serverTimestamp()});return true}catch{return false}}
 export async function readBetaHistoryCloud(max=30){const fb=getLookGoFirebase();const user=await cloudUser();if(!fb||!user)return [] as Array<Record<string,unknown>>;try{const snap=await getDocs(query(collection(fb.db,"users",user.uid,"history"),orderBy("createdAt","desc"),limit(max)));return snap.docs.map(d=>({id:d.id,...d.data()}))}catch{return [] as Array<Record<string,unknown>>}}
