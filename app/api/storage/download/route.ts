@@ -1,0 +1,22 @@
+import { NextResponse } from "next/server";
+
+export const runtime="nodejs";
+
+function storageBucket(){return String(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET||"").trim().replace(/^gs:\/\//,"")}
+function tokenFrom(request:Request){const raw=request.headers.get("authorization")||"";return raw.replace(/^Bearer\s+/i,"").trim()}
+function validPath(path:string){return /^users\/[A-Za-z0-9_-]{6,160}\/(reference|wardrobe|tryons|runways)\/[^/]{1,220}$/.test(path)}
+
+export async function GET(request:Request){
+ try{
+  const bucket=storageBucket();const token=tokenFrom(request);const url=new URL(request.url);const path=String(url.searchParams.get("path")||"");
+  if(!bucket)return NextResponse.json({error:"Firebase Storage n’est pas configuré."},{status:503});
+  if(!token)return NextResponse.json({error:"Session Firebase absente."},{status:401});
+  if(!validPath(path))return NextResponse.json({error:"Chemin de média invalide."},{status:400});
+  const target=`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(path)}?alt=media`;
+  const response=await fetch(target,{headers:{Authorization:`Firebase ${token}`},cache:"no-store"});
+  if(!response.ok){const text=await response.text();console.error("FIREBASE_STORAGE_PROXY_DOWNLOAD_FAILED",response.status,text.slice(0,600));return NextResponse.json({error:"Média cloud indisponible.",status:response.status},{status:response.status>=400&&response.status<600?response.status:502})}
+  const headers=new Headers();headers.set("content-type",response.headers.get("content-type")||"application/octet-stream");headers.set("cache-control","private, no-store, max-age=0");
+  const length=response.headers.get("content-length");if(length)headers.set("content-length",length);
+  return new Response(response.body,{status:200,headers});
+ }catch(error){console.error("FIREBASE_STORAGE_PROXY_DOWNLOAD_ERROR",error);return NextResponse.json({error:"Lecture cloud indisponible."},{status:502})}
+}
