@@ -9,63 +9,103 @@ import type { BetaMediaKey } from "@/lib/beta-media";
 
 const EMAIL_KEY="lookgo_beta_email_link";
 
-async function cloudUser():Promise<User|null>{const fb=getLookGoFirebase();if(!fb)return null;if(fb.auth.currentUser)return fb.auth.currentUser;try{return (await signInAnonymously(fb.auth)).user}catch{return null}}
+async function cloudUser():Promise<User|null>{
+ const fb=getLookGoFirebase();
+ if(!fb)return null;
+ if(fb.auth.currentUser)return fb.auth.currentUser;
+ try{return (await signInAnonymously(fb.auth)).user}catch{return null}
+}
 
 function authErrorCode(error:unknown){return String((error as {code?:string})?.code||"")}
 function accessCodePassword(code:string){return `LookGo-Beta#${code}-Access!2026Aa`}
-function retryableCodeError(error:unknown){const value=authErrorCode(error);return value.includes("operation-not-allowed")||value.includes("admin-restricted-operation")||value.includes("network-request-failed")||value.includes("internal-error")||value.includes("timeout")||value.includes("password-does-not-meet-requirements")||value.includes("weak-password")}
+function isDuplicateCodeError(error:unknown){const value=authErrorCode(error);return value.includes("email-already-in-use")||value.includes("credential-already-in-use")}
+function isHardCodeError(error:unknown){const value=authErrorCode(error);return value.includes("invalid-email")||value.includes("user-mismatch")}
+function retryableCodeError(error:unknown){return !isDuplicateCodeError(error)&&!isHardCodeError(error)}
+function reportAccessCodeError(stage:string,error:unknown){
+ if(typeof window==="undefined")return;
+ const code=authErrorCode(error)||"unknown";
+ void fetch("/api/client-telemetry",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event:"beta_access_code_error",detail:{stage,code}}),keepalive:true}).catch(()=>{});
+}
 function codeError(error:unknown){
  const value=authErrorCode(error);
- if(value.includes("email-already-in-use")||value.includes("credential-already-in-use"))return "Cet email possède déjà un espace Look&Go. Utilisez « Retrouver mon espace ».";
+ if(value.includes("email-already-in-use")||value.includes("credential-already-in-use"))return "Cet email possède déjà un espace Look&Go. Utilisez « Retrouver mon espace » avec ce même email et votre code.";
  if(value.includes("invalid-credential")||value.includes("wrong-password")||value.includes("user-not-found"))return "Email ou code personnel incorrect.";
  if(value.includes("password-does-not-meet-requirements")||value.includes("weak-password"))return "Le service de code personnel est en cours de sécurisation. Votre inscription peut continuer et le code pourra être activé depuis votre profil.";
- if(value.includes("too-many-requests"))return "Trop de tentatives. Attendez quelques minutes puis réessayez.";
+ if(value.includes("too-many-requests"))return "Trop de tentatives. Votre inscription peut continuer et vous pourrez activer le code un peu plus tard depuis votre profil.";
  if(value.includes("operation-not-allowed")||value.includes("admin-restricted-operation"))return "Le code personnel est temporairement indisponible. Votre inscription peut continuer et vous pourrez l’activer ensuite depuis votre profil.";
- if(value.includes("requires-recent-login"))return "Reconnectez-vous avec votre code actuel avant de le modifier.";
- if(value.includes("network-request-failed")||value.includes("internal-error")||value.includes("timeout"))return "Connexion momentanément instable. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.";
- return "Impossible de configurer le code personnel pour le moment.";
+ if(value.includes("requires-recent-login"))return "Votre session doit être renouvelée avant de modifier le code. Votre inscription peut continuer normalement.";
+ if(value.includes("network-request-failed")||value.includes("internal-error")||value.includes("timeout")||value.includes("permission-denied"))return "Connexion momentanément instable. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.";
+ return "Le code personnel n’a pas pu être activé maintenant. Votre inscription peut continuer et vous pourrez l’activer ensuite depuis votre profil.";
 }
 
 export function validBetaAccessCode(code:string){return /^\d{6}$/.test(code)}
 
+async function signInExistingBetaAccess(email:string,code:string):Promise<UserCredential|null>{
+ const fb=getLookGoFirebase();if(!fb)return null;
+ try{return await signInWithEmailAndPassword(fb.auth,email,accessCodePassword(code))}catch(primaryError){
+  const primaryCode=authErrorCode(primaryError);
+  const legacyCandidate=primaryCode.includes("invalid-credential")||primaryCode.includes("wrong-password")||primaryCode.includes("user-not-found");
+  if(!legacyCandidate)return null;
+  try{
+   const legacy=await signInWithEmailAndPassword(fb.auth,email,code);
+   try{await updatePassword(legacy.user,accessCodePassword(code))}catch{}
+   return legacy;
+  }catch{return null}
+ }
+}
+
 export async function createOrUpdateBetaAccessCode(email:string,code:string):Promise<{ok:boolean;error?:string;retryable?:boolean}>{
- const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.",retryable:true};
- const normalized=email.trim().toLowerCase();if(!normalized.includes("@"))return {ok:false,error:"Adresse email invalide."};
+ const fb=getLookGoFirebase();
+ if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.",retryable:true};
+ const normalized=email.trim().toLowerCase();
+ if(!normalized.includes("@"))return {ok:false,error:"Adresse email invalide."};
  if(!validBetaAccessCode(code))return {ok:false,error:"Choisissez un code personnel de 6 chiffres."};
+ let user=await cloudUser();
+ if(!user)return {ok:false,error:"Session Look&Go introuvable. Votre inscription peut continuer et le code pourra être activé ensuite depuis votre profil.",retryable:true};
  try{
-  const user=await cloudUser();if(!user)return {ok:false,error:"Session Look&Go introuvable.",retryable:true};
   const password=accessCodePassword(code);
   if(user.isAnonymous){
-   const credential=EmailAuthProvider.credential(normalized,password);
-   await linkWithCredential(user,credential);
+   try{
+    const credential=EmailAuthProvider.credential(normalized,password);
+    user=(await linkWithCredential(user,credential)).user;
+   }catch(error){
+    if(isDuplicateCodeError(error)){
+     const existing=await signInExistingBetaAccess(normalized,code);
+     if(existing)user=existing.user;
+     else{reportAccessCodeError("link_duplicate",error);return {ok:false,error:codeError(error),retryable:false}}
+    }else{
+     reportAccessCodeError("link",error);
+     return {ok:false,error:codeError(error),retryable:retryableCodeError(error)};
+    }
+   }
   }else{
    if(user.email&&user.email.toLowerCase()!==normalized)return {ok:false,error:"L’email ne correspond pas à votre espace connecté."};
-   await updatePassword(user,password);
+   try{await updatePassword(user,password)}catch(error){reportAccessCodeError("update_password",error);return {ok:false,error:codeError(error),retryable:retryableCodeError(error)}}
   }
+ }catch(error){
+  reportAccessCodeError("credential",error);
+  return {ok:false,error:codeError(error),retryable:retryableCodeError(error)};
+ }
+ try{
   await setDoc(doc(fb.db,"users",user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true});
-  return {ok:true};
- }catch(error){return {ok:false,error:codeError(error),retryable:retryableCodeError(error)}}
+ }catch(error){
+  reportAccessCodeError("metadata",error);
+  // The Firebase credential is already durable at this point. Do not block onboarding if metadata sync is temporarily unavailable.
+ }
+ return {ok:true};
 }
 
 export async function signInBetaWithCode(email:string,code:string):Promise<{ok:boolean;profile?:BetaProfile|null;error?:string}>{
  const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
  try{
-  let credential:UserCredential;
-  try{
-   credential=await signInWithEmailAndPassword(fb.auth,normalized,accessCodePassword(code));
-  }catch(primaryError){
-   const primaryCode=authErrorCode(primaryError);
-   const legacyCandidate=primaryCode.includes("invalid-credential")||primaryCode.includes("wrong-password")||primaryCode.includes("user-not-found");
-   if(!legacyCandidate)throw primaryError;
-   credential=await signInWithEmailAndPassword(fb.auth,normalized,code);
-   try{await updatePassword(credential.user,accessCodePassword(code))}catch{}
-  }
+  const credential=await signInExistingBetaAccess(normalized,code);
+  if(!credential)return {ok:false,error:"Email ou code personnel incorrect."};
   const snap=await getDoc(doc(fb.db,"users",credential.user.uid));
   if(snap.exists()&&!snap.data().accessCodeEnabled){try{await setDoc(doc(fb.db,"users",credential.user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true})}catch{}}
   const profile=snap.exists()?((snap.data().profile||null) as BetaProfile|null):null;
   return {ok:true,profile};
- }catch(error){return {ok:false,error:codeError(error)}}
+ }catch(error){reportAccessCodeError("signin",error);return {ok:false,error:codeError(error)}}
 }
 
 export async function requestBetaEmailLink(email:string){const fb=getLookGoFirebase();if(!fb||typeof window==="undefined")return false;try{await sendSignInLinkToEmail(fb.auth,email,{url:`${window.location.origin}/auth/finish`,handleCodeInApp:true});localStorage.setItem(EMAIL_KEY,email);return true}catch{return false}}
