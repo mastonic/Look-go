@@ -9,9 +9,15 @@ const FOLDERS:Record<string,string>={
  tryonSignature:"tryons",
  tryonBalance:"tryons",
  tryonSmart:"tryons",
+ weddingTryonSignature:"tryons",
+ weddingTryonBalance:"tryons",
+ weddingTryonSmart:"tryons",
  videoSignature:"runways",
  videoBalance:"runways",
  videoSmart:"runways",
+ weddingVideoSignature:"runways",
+ weddingVideoBalance:"runways",
+ weddingVideoSmart:"runways",
 };
 
 function storageBucket(){return String(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET||"").trim().replace(/^gs:\/\//,"")}

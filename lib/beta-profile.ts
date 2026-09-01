@@ -1,4 +1,25 @@
 export type TrendPreference="trend"|"balanced"|"timeless"|"personalized";
+export type WeddingRole="bride"|"maid"|"guest"|"mother";
+export type WeddingVenue="indoor"|"outdoor"|"mixed";
+export type WeddingTime="day"|"evening"|"all-day";
+export type WeddingOutfitPreference="auto"|"dress"|"tailored"|"jumpsuit";
+
+export type WeddingEvent={
+ enabled?:boolean;
+ role?:WeddingRole;
+ date?:string;
+ location?:string;
+ venue?:WeddingVenue;
+ time?:WeddingTime;
+ dressCode?:string;
+ requiredColors?:string[];
+ avoidColors?:string[];
+ budget?:number;
+ boldness?:number;
+ outfitPreference?:WeddingOutfitPreference;
+ notes?:string;
+ updatedAt?:string;
+};
 
 export type BetaProfile={
  email?:string;
@@ -25,6 +46,7 @@ export type BetaProfile={
  codeConfigured?:boolean;
  trendPreference?:TrendPreference;
  trendBoldness?:number;
+ wedding?:WeddingEvent;
 };
 
 const KEY="lookgo_beta_profile_v1";
