@@ -6,6 +6,7 @@ const FOLDERS:Record<string,string>={
  portrait:"reference",
  fullBody:"reference",
  profileState:"reference",
+ wardrobeScan:"wardrobe",
  tryonSignature:"tryons",
  tryonBalance:"tryons",
  tryonSmart:"tryons",
