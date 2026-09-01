@@ -5,6 +5,7 @@ export const runtime="nodejs";
 const FOLDERS:Record<string,string>={
  portrait:"reference",
  fullBody:"reference",
+ profileState:"reference",
  tryonSignature:"tryons",
  tryonBalance:"tryons",
  tryonSmart:"tryons",
@@ -31,7 +32,8 @@ export async function POST(request:Request){
   const isVideo=folder==="runways";const validType=isVideo?file.type.startsWith("video/"):file.type.startsWith("image/");
   if(!validType)return NextResponse.json({error:"Type de fichier invalide."},{status:400});
   const max=isVideo?120*1024*1024:12*1024*1024;if(file.size>max)return NextResponse.json({error:"Fichier trop volumineux."},{status:413});
-  const safeName=clean(requestedName||key)||key;const path=`users/${uid}/${folder}/${key}-${Date.now()}-${safeName}`;
+  const safeName=clean(requestedName||key)||key;
+  const path=key==="profileState"?`users/${uid}/reference/profile-state-v1.dat`:`users/${uid}/${folder}/${key}-${Date.now()}-${safeName}`;
   const target=`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o?name=${encodeURIComponent(path)}`;
   const response=await fetch(target,{method:"POST",headers:{Authorization:`Firebase ${token}`,"Content-Type":file.type||"application/octet-stream"},body:Buffer.from(await file.arrayBuffer()),cache:"no-store"});
   const text=await response.text();
