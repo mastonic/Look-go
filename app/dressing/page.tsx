@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readBetaProfile, type BetaProfile } from "@/lib/beta-profile";
 import { readBetaProfileCloud } from "@/lib/firebase-beta";
@@ -118,6 +118,7 @@ function categoryLabel(category: WardrobeCategory) {
 
 export default function DressingPage() {
   const router = useRouter();
+  const photoUrls = useRef<Set<string>>(new Set());
   const [profile, setProfile] = useState<BetaProfile | null>(null);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
   const [loadingWardrobe, setLoadingWardrobe] = useState(true);
@@ -156,9 +157,13 @@ export default function DressingPage() {
     };
   }, [router]);
 
-  useEffect(() => () => {
-    photos.forEach((photo) => URL.revokeObjectURL(photo.url));
-  }, [photos]);
+  useEffect(() => {
+    const urls = photoUrls.current;
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
+  }, []);
 
   const selectedDetections = useMemo(
     () => detections.filter((item) => !ignored.has(item.tempId)),
@@ -184,6 +189,21 @@ export default function DressingPage() {
       .join(" · ") || "À découvrir";
   }, [wardrobe]);
 
+  function releasePhoto(photo: ScanPhoto) {
+    if (photoUrls.current.has(photo.url)) {
+      URL.revokeObjectURL(photo.url);
+      photoUrls.current.delete(photo.url);
+    }
+  }
+
+  function resetScan() {
+    photos.forEach(releasePhoto);
+    setPhotos([]);
+    setDetections([]);
+    setIgnored(new Set());
+    setScanNote("");
+  }
+
   async function addPhotos(event: ChangeEvent<HTMLInputElement>) {
     const incoming = Array.from(event.target.files || []);
     event.target.value = "";
@@ -200,11 +220,13 @@ export default function DressingPage() {
       const prepared = await Promise.all(
         chosen.map(async (file, index) => {
           const blob = await compressWardrobePhoto(file);
+          const url = URL.createObjectURL(blob);
+          photoUrls.current.add(url);
           return {
             id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
             blob,
             name: file.name || `penderie-${index + 1}.jpg`,
-            url: URL.createObjectURL(blob),
+            url,
           } satisfies ScanPhoto;
         }),
       );
@@ -220,7 +242,7 @@ export default function DressingPage() {
   function removePhoto(id: string) {
     setPhotos((current) => {
       const target = current.find((photo) => photo.id === id);
-      if (target) URL.revokeObjectURL(target.url);
+      if (target) releasePhoto(target);
       return current.filter((photo) => photo.id !== id);
     });
     setDetections([]);
@@ -295,11 +317,7 @@ export default function DressingPage() {
       const refreshed = await readWardrobeItems();
       setWardrobe(refreshed);
       setSuccess(`${saved} pièce${saved > 1 ? "s" : ""} ajoutée${saved > 1 ? "s" : ""} à votre dressing.`);
-      photos.forEach((photo) => URL.revokeObjectURL(photo.url));
-      setPhotos([]);
-      setDetections([]);
-      setIgnored(new Set());
-      setScanNote("");
+      resetScan();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Sauvegarde impossible.");
     } finally {
@@ -332,7 +350,7 @@ export default function DressingPage() {
           <div className="wardrobe-hero-copy">
             <span className="wardrobe-overline">MON DRESSING PRIVÉ IA</span>
             <h1>Votre penderie,<br/><em>comprise par l’IA.</em></h1>
-            <p>Photographiez votre penderie. Look&Go reconnaît les pièces visibles, propose leur catégorie, leur couleur et leur style. Rien n’est enregistré avant votre validation.</p>
+            <p>Photographiez votre penderie. Look&Go reconnaît les pièces visibles, propose leur catégorie, leur couleur et leur style. Rien n’est enregistré dans votre dressing avant votre validation.</p>
           </div>
           <div className="wardrobe-stats">
             <article className="wardrobe-stat"><strong>{loadingWardrobe ? "—" : wardrobe.length}</strong><span>pièces enregistrées</span></article>
@@ -346,7 +364,7 @@ export default function DressingPage() {
             <div>
               <span className="wardrobe-overline">SCAN DRESSING IA</span>
               <h2>Photographier ma penderie</h2>
-              <p>Ajoutez jusqu’à 3 angles. Pour de meilleurs résultats, évitez les vêtements trop tassés et privilégiez une bonne lumière.</p>
+              <p>Ajoutez jusqu’à 3 angles. Pour de meilleurs résultats, évitez les vêtements trop tassés et privilégiez une bonne lumière. Les photos sont envoyées au moteur IA pour l’analyse puis enregistrées dans votre espace uniquement lorsque vous validez le résultat.</p>
             </div>
             <span className="wardrobe-security">✓ Validation obligatoire avant sauvegarde</span>
           </div>
@@ -370,7 +388,7 @@ export default function DressingPage() {
             <button className="wardrobe-primary" type="button" disabled={!photos.length || scanning || saving} onClick={analyze}>
               {scanning ? "Analyse de la penderie…" : "Analyser avec Look&Go Vision →"}
             </button>
-            {photos.length > 0 && <button className="wardrobe-secondary" type="button" onClick={() => { photos.forEach((photo) => URL.revokeObjectURL(photo.url)); setPhotos([]); setDetections([]); setIgnored(new Set()); setError(""); }}>Recommencer</button>}
+            {photos.length > 0 && <button className="wardrobe-secondary" type="button" onClick={() => { resetScan(); setError(""); }}>Recommencer</button>}
           </div>
 
           {scanning && <div className="wardrobe-progress"><strong>L’IA observe les pièces visibles…</strong><span>Type de vêtement · catégorie · couleur · motif · style · matière probable · saison · occasion</span></div>}
