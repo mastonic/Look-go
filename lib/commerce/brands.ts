@@ -35,7 +35,7 @@ export function inferShoppingCategory(query:string):ShoppingCategory{
  if(includesAny(q,["pull","maille","cardigan","gilet","sweat"]))return "knitwear";
  if(includesAny(q,["manteau","trench","parka","doudoune","veste hiver"]))return "coat";
  if(includesAny(q,["chaussure","chaussures","sandale","sandales","escarpin","escarpins","sneaker","sneakers","basket","baskets","botte","bottes","bottine","bottines","mocassin","mocassins"]))return "shoes";
- if(includesAny(q,["sac","sacs","pochette","pochettes","cab as","cabas"]))return "bag";
+ if(includesAny(q,["sac","sacs","pochette","pochettes","cabas"]))return "bag";
  if(includesAny(q,["ceinture","foulard","bijou","bijoux","lunettes","chapeau","accessoire","accessoires"]))return "accessory";
  if(includesAny(q,["t shirt","tee shirt","debardeur","basique","basics"]))return "basics";
  return "general";
@@ -55,7 +55,7 @@ export function rankBrandsForShopping(input:{tier?:string;query:string;preferred
  const offset=all.length?stableHash(`${q}:${input.tier||"all"}`)%all.length:0;
  return all.map((brand,index)=>{
   const affinity=brand.strengths?.[category]??brand.strengths?.general??.5;
-  const preference=preferred.has(normalize(brand.id))||preferred.has(normalize(brand.name))?.22:0;
+  const preference=(preferred.has(normalize(brand.id))||preferred.has(normalize(brand.name)))?.22:0;
   const diversity=((index-offset+all.length)%all.length)/Math.max(1,all.length)*.025;
   return {brand,score:affinity+preference-diversity};
  }).sort((a,b)=>b.score-a.score).map(item=>item.brand);
