@@ -3,7 +3,7 @@ const LEGACY_DB_NAME="lookgo_beta_media_v1";
 const STORE="media";
 const DB_VERSION=1;
 const CACHE_NAME="lookgo_beta_media_cache_v1";
-export type BetaMediaKey="portrait"|"fullBody"|"tryonSignature"|"tryonBalance"|"tryonSmart"|"videoSignature"|"videoBalance"|"videoSmart";
+export type BetaMediaKey="portrait"|"fullBody"|"tryonSignature"|"tryonBalance"|"tryonSmart"|"videoSignature"|"videoBalance"|"videoSmart"|"weddingTryonSignature"|"weddingTryonBalance"|"weddingTryonSmart"|"weddingVideoSignature"|"weddingVideoBalance"|"weddingVideoSmart";
 
 function ensureIndexedDb(){if(typeof window==="undefined"||!("indexedDB" in window))throw new Error("IndexedDB indisponible")}
 function openNamedDb(name:string):Promise<IDBDatabase>{ensureIndexedDb();return new Promise((resolve,reject)=>{const req=indexedDB.open(name,DB_VERSION);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(STORE))db.createObjectStore(STORE)};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error("Ouverture IndexedDB impossible"));req.onblocked=()=>reject(new Error("IndexedDB bloquée"))})}
@@ -31,4 +31,4 @@ export async function hasBetaMedia(key:BetaMediaKey){try{return Boolean(await re
 
 export async function deleteBetaMedia(key:BetaMediaKey){try{const db=await openDb();try{await new Promise<void>((resolve,reject)=>{const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete(key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)})}finally{db.close()}}catch{}await deleteCache(key)}
 
-export async function clearBetaMedia(){for(const key of ["portrait","fullBody","tryonSignature","tryonBalance","tryonSmart","videoSignature","videoBalance","videoSmart"] as BetaMediaKey[])await deleteBetaMedia(key)}
+export async function clearBetaMedia(){for(const key of ["portrait","fullBody","tryonSignature","tryonBalance","tryonSmart","videoSignature","videoBalance","videoSmart","weddingTryonSignature","weddingTryonBalance","weddingTryonSmart","weddingVideoSignature","weddingVideoBalance","weddingVideoSmart"] as BetaMediaKey[])await deleteBetaMedia(key)}
