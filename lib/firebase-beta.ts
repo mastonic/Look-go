@@ -2,7 +2,7 @@
 
 import { addDoc, collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { EmailAuthProvider, isSignInWithEmailLink, linkWithCredential, sendSignInLinkToEmail, signInAnonymously, signInWithEmailAndPassword, signInWithEmailLink, signOut, updatePassword, type User } from "firebase/auth";
+import { EmailAuthProvider, isSignInWithEmailLink, linkWithCredential, sendSignInLinkToEmail, signInAnonymously, signInWithEmailAndPassword, signInWithEmailLink, signOut, updatePassword, type User, type UserCredential } from "firebase/auth";
 import { getLookGoFirebase } from "@/lib/firebase-client";
 import type { BetaProfile } from "@/lib/beta-profile";
 import type { BetaMediaKey } from "@/lib/beta-media";
@@ -51,7 +51,7 @@ export async function signInBetaWithCode(email:string,code:string):Promise<{ok:b
  const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
  try{
-  let credential;
+  let credential:UserCredential;
   try{
    credential=await signInWithEmailAndPassword(fb.auth,normalized,accessCodePassword(code));
   }catch(primaryError){
