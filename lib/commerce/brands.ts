@@ -55,7 +55,8 @@ export function rankBrandsForShopping(input:{tier?:string;query:string;preferred
  const offset=all.length?stableHash(`${q}:${input.tier||"all"}`)%all.length:0;
  return all.map((brand,index)=>{
   const affinity=brand.strengths?.[category]??brand.strengths?.general??.5;
-  const preference=(preferred.has(normalize(brand.id))||preferred.has(normalize(brand.name)))?.22:0;
+  const isPreferred=preferred.has(normalize(brand.id))||preferred.has(normalize(brand.name));
+  const preference=isPreferred?.22:0;
   const diversity=((index-offset+all.length)%all.length)/Math.max(1,all.length)*.025;
   return {brand,score:affinity+preference-diversity};
  }).sort((a,b)=>b.score-a.score).map(item=>item.brand);
