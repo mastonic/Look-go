@@ -8,6 +8,7 @@ export const runtime="nodejs";
 const PROJECT_ID=process.env.VERCEL_PROJECT_ID||"prj_pB0fwoTSSKch43iEIhLhWXgdeKAF";
 const TEAM_ID=process.env.VERCEL_ORG_ID||"team_A7zI4peSDI0BPTedg6CHWC4A";
 const PROJECT_NAME="look-go";
+const RUNWAY_PROMPT_VERSION="runway-motion-v3";
 const PROVIDER_ENV:Record<AiProviderId,string>={openai:"OPENAI_API_KEY",google:"GOOGLE_AI_API_KEY",anthropic:"ANTHROPIC_API_KEY",higgsfield:"HIGGSFIELD_API_KEY"};
 
 async function firebaseAdminEmail(request:Request){
@@ -36,9 +37,32 @@ async function isAdmin(request:Request){
 function enabledEnv(provider:AiProviderId){return `AI_${provider.toUpperCase()}_ENABLED`;}
 function vercelHeaders(){return {Authorization:`Bearer ${process.env.VERCEL_TOKEN}`,"Content-Type":"application/json"};}
 
+async function latestOpenAiVideo(){
+ const key=String(process.env.OPENAI_API_KEY||"").trim();
+ if(!key||process.env.AI_OPENAI_ENABLED==="false")return null;
+ try{
+  const response=await fetch("https://api.openai.com/v1/videos?limit=1&order=desc",{headers:{Authorization:`Bearer ${key}`},cache:"no-store"});
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok)return null;
+  const video=Array.isArray(body?.data)?body.data[0]:null;
+  if(!video?.id)return null;
+  const created=Number(video.created_at||0);
+  return {
+   provider:"openai",
+   model:String(video.model||process.env.OPENAI_VIDEO_MODEL||"sora-2"),
+   videoId:String(video.id),
+   duration:Number(video.seconds||8),
+   createdAt:created?new Date(created*1000).toISOString():null,
+   status:String(video.status||"unknown"),
+   promptVersion:RUNWAY_PROMPT_VERSION,
+  };
+ }catch{return null;}
+}
+
 export async function GET(request:Request){
  if(!(await isAdmin(request)))return NextResponse.json({error:"Accès refusé."},{status:403});
- return NextResponse.json({providers:providerConfig().map(({id,label,enabled,configured,capabilities})=>({id,label,enabled,configured,capabilities})),canManage:Boolean(process.env.VERCEL_TOKEN)});
+ const lastVideo=await latestOpenAiVideo();
+ return NextResponse.json({providers:providerConfig().map(({id,label,enabled,configured,capabilities})=>({id,label,enabled,configured,capabilities})),canManage:Boolean(process.env.VERCEL_TOKEN),lastVideo});
 }
 
 async function testProvider(provider:AiProviderId,keyOverride?:string){
