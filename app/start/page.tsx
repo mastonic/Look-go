@@ -6,8 +6,13 @@ import { readBetaProfile, saveBetaProfile, type BetaProfile } from "@/lib/beta-p
 import { readBetaProfileCloud } from "@/lib/firebase-beta";
 
 function hasIdentity(profile:BetaProfile){return Boolean(profile.email||profile.pseudo)}
-function nextPath(profile:BetaProfile){
-  if(profile.complete)return "/profil";
+function safeReturnTo(){
+  if(typeof window==="undefined")return "";
+  const value=new URLSearchParams(window.location.search).get("returnTo")||"";
+  return value.startsWith("/")&&!value.startsWith("//")?value:"";
+}
+function nextPath(profile:BetaProfile,returnTo=""){
+  if(profile.complete)return returnTo||"/profil";
   const identityReady=Boolean(profile.email&&profile.pseudo&&profile.height&&profile.weight&&profile.age&&profile.portraitName&&profile.fullName);
   return identityReady?"/inscription/style":"/inscription";
 }
@@ -18,6 +23,8 @@ export default function StartPage(){
   useEffect(()=>{
     let active=true;
     (async()=>{
+      const returnTo=safeReturnTo();
+      if(returnTo&&typeof window!=="undefined")localStorage.setItem("lookgo_return_to",returnTo);
       const local=readBetaProfile();
       let cloud:BetaProfile|null=null;
       try{cloud=await readBetaProfileCloud()}catch{}
@@ -26,9 +33,10 @@ export default function StartPage(){
       if(hasIdentity(merged)){
         saveBetaProfile(merged);
         setLabel(profileLabel(merged));
-        router.replace(nextPath(merged));
+        router.replace(nextPath(merged,returnTo));
       }else{
-        router.replace("/connexion?mode=register");
+        const suffix=returnTo?`&returnTo=${encodeURIComponent(returnTo)}`:"";
+        router.replace(`/connexion?mode=register${suffix}`);
       }
     })();
     return()=>{active=false};
