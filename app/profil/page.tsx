@@ -12,6 +12,7 @@ import {
   saveBetaProfileCloud,
   signOutBetaCloud,
 } from "@/lib/firebase-beta";
+import pageStyles from "./ProfilePage.module.css";
 import "./profil.css";
 
 function trace(event: string, data: Record<string, unknown> = {}) {
@@ -131,13 +132,13 @@ export default function ProfilPage() {
   }
 
   if (profile === null) {
-    return <main className="account-page dashboard-account-page" />;
+    return <main className={`account-page ${pageStyles.page}`} />;
   }
 
   if (!profile.email && !profile.pseudo) {
     return (
-      <main className="account-page dashboard-account-page">
-        <section className="dashboard-profile-shell">
+      <main className={`account-page ${pageStyles.page}`}>
+        <section className={pageStyles.shell}>
           <div className="profile-status">
             <div>
               <span>MODE BÊTA</span>
@@ -152,8 +153,8 @@ export default function ProfilPage() {
   }
 
   return (
-    <main className="account-page dashboard-account-page">
-      <header className="account-header dashboard-account-header">
+    <main className={`account-page ${pageStyles.page}`}>
+      <header className="account-header">
         <Link href="/" className="account-logo">LOOK&GO</Link>
         <div>
           <span>{profile.email}</span>
@@ -161,9 +162,9 @@ export default function ProfilPage() {
         </div>
       </header>
 
-      <section className="dashboard-profile-shell">
+      <section className={pageStyles.shell}>
         {!codeEnabled && (
-          <aside className="dashboard-access-banner" aria-label="Sécuriser mon espace">
+          <aside className={pageStyles.accessBanner} aria-label="Sécuriser mon espace">
             <div>
               <span>ESPACE BÊTA</span>
               <strong>Sécurisez votre dressing privé.</strong>
