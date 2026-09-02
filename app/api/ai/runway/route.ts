@@ -8,7 +8,20 @@ const TIMEOUT_MS=25_000;
 const GOOGLE_BASE="https://generativelanguage.googleapis.com/v1beta";
 const GOOGLE_SAFE_MODEL="veo-3.1-generate-preview";
 
-function runwayPrompt(tier:string){const label=tier==="signature"?"Signature":tier==="smart"?"Smart":"Équilibre";return [`Create a realistic vertical fashion runway clip for the ${label} Look&Go look using the supplied image as the exact visual reference and starting frame.`,"Preserve the same adult person's facial identity, skin tone, hairstyle, apparent age, body proportions, morphology and outfit exactly as shown in the reference image.","Do not beautify, slim, enlarge, reshape, de-age or replace the person. Do not redesign, recolor or swap the clothing.","Motion should be restrained and physically natural: a slow confident walk forward, subtle fabric movement, then a gentle 30 to 45 degree turn.","Keep the full body visible from head to shoes. Stable premium editorial lighting, clean fashion-studio background, realistic anatomy, no camera warping, no sudden cuts.","No dialogue, no captions, no text overlays. The clip is a fashion visualization. Prioritize identity and outfit continuity over dramatic motion."].join(" ")}
+function runwayPrompt(tier:string){
+ const label=tier==="signature"?"Signature":tier==="smart"?"Smart":"Équilibre";
+ return [
+  `Create an ultra-realistic 8-second vertical fashion runway video for the ${label} Look&Go look. Use the supplied image as the exact identity, body, outfit and first-frame reference.`,
+  "ABSOLUTE CONTINUITY: preserve the exact same adult person's face, facial proportions, skin tone, hairstyle, apparent age, body shape, height impression, limbs, hands and outfit from the reference. Do not beautify, slim, enlarge, reshape, de-age, replace or morph the person. Do not redesign, recolor, shorten, lengthen or swap any garment, shoe or accessory.",
+  "TIMELINE 0.0-3.0 seconds: the person starts naturally from the reference pose and walks straight toward the camera with 2 to 4 realistic runway steps. Natural heel-to-toe footfalls, normal arm swing, subtle breathing, believable balance and restrained fabric movement. Move closer only moderately so the full body remains visible.",
+  "TIMELINE 3.0-6.0 seconds: the person slows, plants the feet naturally and performs one smooth complete 360-degree turn on the spot, at realistic human speed. Show front, side, back, opposite side and return toward front. Clothing and hair must react with believable inertia and settle naturally. No spinning like a mannequin and no impossible foot sliding.",
+  "TIMELINE 6.0-8.0 seconds: creative freedom within a premium fashion editorial style. Prefer one realistic finishing action such as a small final step, a subtle three-quarter pose, a natural glance, or a gentle adjustment of posture. Keep it elegant, restrained and physically plausible.",
+  "CAMERA: vertical 9:16, stable eye-level or slightly low fashion camera, minimal natural dolly only if needed to preserve full-body framing. Keep head, hands and both shoes visible throughout. No zoom jumps, no orbit around the person, no cuts, no teleportation, no camera shake and no lens warping.",
+  "REALISM: realistic human gait, anatomy, joints, hands, feet, weight transfer, cloth physics, shadows and floor contact. Avoid floating feet, skating, duplicated limbs, rubber limbs, face drift, body flicker, outfit flicker, background melting or sudden pose changes.",
+  "LIGHTING AND SET: premium clean fashion-studio environment with stable editorial lighting and consistent shadows. Preserve the reference background when possible rather than inventing a distracting scene.",
+  "No dialogue, no captions, no logos added, no text overlays. Prioritize identity continuity, body continuity, outfit continuity and believable physical motion over dramatic cinematic effects."
+ ].join(" ");
+}
 function normalizeReference(image:File){if(!["image/jpeg","image/png","image/webp"].includes(image.type))throw new Error("FORMAT_IMAGE");return image}
 async function timedFetch(url:string,init:RequestInit,timeout=TIMEOUT_MS){const c=new AbortController();const timer=setTimeout(()=>c.abort(),timeout);try{return await fetch(url,{...init,signal:c.signal})}finally{clearTimeout(timer)}}
 function googleId(name:string){return `google_${Buffer.from(name).toString("base64url")}`}
@@ -47,7 +60,7 @@ async function createGoogle(image:File,tier:string){
 
 async function createOpenAI(image:File,tier:string){
  const key=process.env.OPENAI_API_KEY;if(!key||!providerEnabled("openai"))throw new Error("OPENAI_NOT_CONFIGURED");
- const model=process.env.OPENAI_VIDEO_MODEL||"sora-2";const body=new FormData();body.append("model",model);body.append("prompt",runwayPrompt(tier));body.append("seconds",process.env.OPENAI_VIDEO_SECONDS||"8");body.append("size","720x1280");body.append("input_reference",image,image.name||`${tier}-runway.jpg`);
+ const model=process.env.OPENAI_VIDEO_MODEL||"sora-2";const body=new FormData();body.append("model",model);body.append("prompt",runwayPrompt(tier));body.append("seconds","8");body.append("size","720x1280");body.append("input_reference",image,image.name||`${tier}-runway.jpg`);
  const response=await timedFetch("https://api.openai.com/v1/videos",{method:"POST",headers:{Authorization:`Bearer ${key}`},body});const data=await response.json().catch(()=>({}));
  if(!response.ok){const providerMessage=String(data?.error?.message||"");console.error("OpenAI video create failed",response.status,providerMessage||data);if(response.status===429)throw new Error("OPENAI_QUOTA");if(response.status===401||response.status===403)throw new Error("OPENAI_AUTH");throw new Error(`OPENAI_HTTP_${response.status}`)}
  if(!data?.id)throw new Error("OPENAI_NO_OPERATION");return {id:String(data.id),status:String(data.status||"queued"),progress:Number(data.progress||0),provider:"openai",model};
@@ -57,7 +70,7 @@ export async function POST(request:Request){
  const started=Date.now();
  try{
   const incoming=await request.formData();const rawImage=incoming.get("image");const tier=String(incoming.get("tier")||"").toLowerCase();if(!(rawImage instanceof File))return NextResponse.json({error:"Le look Try-On validé est obligatoire."},{status:400});if(!TIERS.has(tier))return NextResponse.json({error:"Niveau de look invalide."},{status:400});if(rawImage.size>15_000_000)return NextResponse.json({error:"L'image Try-On doit faire moins de 15 Mo."},{status:400});const image=normalizeReference(rawImage);
-  const attempts=[createGoogle,createOpenAI];const errors:string[]=[];
+  const attempts=[createOpenAI,createGoogle];const errors:string[]=[];
   for(const create of attempts){const providerStarted=Date.now();try{const result=await create(image,tier);const meta=buildAiCostMeta(result.provider,result.model,"video",Date.now()-providerStarted);console.info("RUNWAY_CREATE_SUCCESS",JSON.stringify({tier,id:result.id,...meta,totalDurationMs:Date.now()-started}));return NextResponse.json({...result,tier,meta})}catch(error){const code=error instanceof Error?(error.name==="AbortError"?"PROVIDER_TIMEOUT":error.message):"PROVIDER_ERROR";errors.push(code);console.error("RUNWAY_PROVIDER_FAILED",JSON.stringify({tier,code}));}}
   const configuredErrors=errors.filter(code=>!code.endsWith("NOT_CONFIGURED"));
   const quotaOnly=configuredErrors.length>0&&configuredErrors.every(x=>x.includes("QUOTA"));
