@@ -100,14 +100,26 @@ export async function createOrUpdateBetaAccessCode(email:string,code:string):Pro
 export async function signInBetaWithCode(email:string,code:string):Promise<{ok:boolean;profile?:BetaProfile|null;error?:string}>{
  const fb=getLookGoFirebase();if(!fb)return {ok:false,error:"Le service de connexion est momentanément indisponible. Réessayez dans quelques instants."};
  const normalized=email.trim().toLowerCase();if(!normalized.includes("@")||!validBetaAccessCode(code))return {ok:false,error:"Entrez votre email et votre code personnel à 6 chiffres."};
+ let credential:UserCredential|null=null;
  try{
-  const credential=await signInExistingBetaAccess(normalized,code);
-  if(!credential)return {ok:false,error:"Email ou code personnel incorrect."};
+  credential=await signInExistingBetaAccess(normalized,code);
+ }catch(error){
+  reportAccessCodeError("auth_signin",error);
+  return {ok:false,error:codeError(error)};
+ }
+ if(!credential)return {ok:false,error:"Email ou code personnel incorrect."};
+ let profile:BetaProfile|null=null;
+ try{
   const snap=await getDoc(doc(fb.db,"users",credential.user.uid));
-  if(snap.exists()&&!snap.data().accessCodeEnabled){try{await setDoc(doc(fb.db,"users",credential.user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true})}catch{}}
-  const profile=snap.exists()?((snap.data().profile||null) as BetaProfile|null):null;
-  return {ok:true,profile};
- }catch(error){reportAccessCodeError("signin",error);return {ok:false,error:codeError(error)}}
+  if(snap.exists()){
+   profile=((snap.data().profile||null) as BetaProfile|null);
+   if(!snap.data().accessCodeEnabled){try{await setDoc(doc(fb.db,"users",credential.user.uid),{accessCodeEnabled:true,accessCodeUpdatedAt:serverTimestamp(),updatedAt:serverTimestamp(),beta:true},{merge:true})}catch(error){reportAccessCodeError("signin_metadata",error)}}
+  }
+ }catch(error){
+  reportAccessCodeError("signin_profile_restore",error);
+  // Authentication succeeded. Firestore restoration must never invalidate a valid login.
+ }
+ return {ok:true,profile};
 }
 
 export async function requestBetaEmailLink(email:string){const fb=getLookGoFirebase();if(!fb||typeof window==="undefined")return false;try{await sendSignInLinkToEmail(fb.auth,email,{url:`${window.location.origin}/auth/finish`,handleCodeInApp:true});localStorage.setItem(EMAIL_KEY,email);return true}catch{return false}}
