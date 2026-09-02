@@ -9,7 +9,6 @@ export default function OfflinePage() {
       <h1>Votre dressing reste avec vous.</h1>
       <p>La connexion internet est momentanément indisponible. Les écrans déjà ouverts peuvent rester accessibles, mais les générations IA, le shopping et la synchronisation nécessitent une connexion.</p>
       <div>
-        <button type="button" onClick={undefined as never} hidden />
         <Link href="/profil">Retour à mon espace</Link>
         <Link href="/">Accueil Look&Go</Link>
       </div>
