@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import AdminShortcut from "@/components/AdminShortcut";
 import AppNavigation from "@/components/AppNavigation";
 import "./globals.css";
+import "./responsive.css";
 
 const serif = Cormorant_Garamond({
   subsets: ["latin"],
@@ -26,6 +28,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
   applicationName: "Look&Go",
+  icons: {
+    icon: [
+      { url: "/pwa-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/pwa-192.png", sizes: "192x192", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -53,7 +62,7 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fff9f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#111111" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1715" },
   ],
 };
 
@@ -62,6 +71,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="fr" className={`${serif.variable} ${sans.variable}`}>
       <body>
         <PwaRegister />
+        <PwaInstallPrompt />
         <AdminShortcut />
         <AppNavigation />
         {children}
