@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Inter } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
 import AdminShortcut from "@/components/AdminShortcut";
 import AppNavigation from "@/components/AppNavigation";
+import ProfileDashboard from "@/components/ProfileDashboard";
 import "./globals.css";
 
 const serif = Cormorant_Garamond({
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <PwaRegister />
         <AdminShortcut />
         <AppNavigation />
+        <ProfileDashboard />
         {children}
       </body>
     </html>
