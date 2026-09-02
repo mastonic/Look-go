@@ -5,6 +5,7 @@ import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import AdminShortcut from "@/components/AdminShortcut";
 import AppNavigation from "@/components/AppNavigation";
 import "./globals.css";
+import "./responsive.css";
 
 const serif = Cormorant_Garamond({
   subsets: ["latin"],
