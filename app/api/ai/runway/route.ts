@@ -142,7 +142,7 @@ export async function POST(request:Request){
    try{
     const result=await create(image,tier);
     const meta=buildAiCostMeta(result.provider,result.model,"video",Date.now()-providerStarted);
-    console.info("RUNWAY_CREATE_SUCCESS",JSON.stringify({tier,id:result.id,provider:result.provider,model:result.model,promptVersion:RUNWAY_PROMPT_VERSION,durationSeconds:RUNWAY_DURATION_SECONDS,...meta,totalDurationMs:Date.now()-started}));
+    console.info("RUNWAY_CREATE_SUCCESS",JSON.stringify({tier,id:result.id,promptVersion:RUNWAY_PROMPT_VERSION,durationSeconds:RUNWAY_DURATION_SECONDS,...meta,totalDurationMs:Date.now()-started}));
     return NextResponse.json({...result,tier,promptVersion:RUNWAY_PROMPT_VERSION,durationSeconds:RUNWAY_DURATION_SECONDS,createdAt:new Date().toISOString(),meta});
    }catch(error){
     const code=error instanceof Error?(error.name==="AbortError"?"PROVIDER_TIMEOUT":error.message):"PROVIDER_ERROR";
