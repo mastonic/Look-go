@@ -1,32 +1,201 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
-import { BetaProfile, clearBetaProfile, readBetaProfile, saveBetaProfile, type TrendPreference } from "@/lib/beta-profile";
-import { BetaMediaKey, clearBetaMedia, readBetaMedia, saveBetaMedia } from "@/lib/beta-media";
-import { betaAuthStatus, createOrUpdateBetaAccessCode, readBetaMediaCloud, readBetaProfileCloud, saveBetaProfileCloud, signOutBetaCloud, uploadBetaMediaCloud } from "@/lib/firebase-beta";
-import { weddingRoleLabel } from "@/lib/wedding";
+import { FormEvent, useEffect, useState } from "react";
+import ProfileDashboard from "@/components/ProfileDashboard";
+import { type BetaProfile, clearBetaProfile, readBetaProfile, saveBetaProfile } from "@/lib/beta-profile";
+import { clearBetaMedia } from "@/lib/beta-media";
+import {
+  betaAuthStatus,
+  createOrUpdateBetaAccessCode,
+  readBetaProfileCloud,
+  saveBetaProfileCloud,
+  signOutBetaCloud,
+} from "@/lib/firebase-beta";
 import "./profil.css";
 
-async function restoreMedia(kind:BetaMediaKey){try{const local=await readBetaMedia(kind);if(local)return local}catch{}const cloud=await readBetaMediaCloud(kind);if(cloud?.blob){try{await saveBetaMedia(kind,cloud.blob)}catch{}return cloud.blob}return null}
-function trendLabel(value?:TrendPreference){if(value==="trend")return "Très tendance";if(value==="balanced")return "Tendance mais portable";if(value==="timeless")return "Intemporel";return "Mix personnalisé"}
-function boldnessLabel(value?:number){const n=typeof value==="number"?value:50;return n<35?"Prudent":n>65?"Audacieux":"Équilibré"}
-function trace(event:string,data:Record<string,unknown>={}){try{void fetch("/api/client-telemetry",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({event,...data})})}catch{}}
+function trace(event: string, data: Record<string, unknown> = {}) {
+  try {
+    void fetch("/api/client-telemetry", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event, ...data }),
+    });
+  } catch {}
+}
 
-function PhotoCard({kind,label,name,onSaved}:{kind:"portrait"|"fullBody";label:string;name?:string;onSaved:(name:string)=>void}){const [url,setUrl]=useState("");const [saving,setSaving]=useState(false);useEffect(()=>{let current="";restoreMedia(kind).then(blob=>{if(blob){current=URL.createObjectURL(blob);setUrl(current)}});return()=>{if(current)URL.revokeObjectURL(current)}},[kind,name]);async function change(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;setSaving(true);let ok=false;try{await saveBetaMedia(kind,f);ok=true}catch{}try{if(await uploadBetaMediaCloud(kind,f,f.name))ok=true}catch{}if(ok)onSaved(f.name);setSaving(false)}return <article className="reference-photo-card"><div className="reference-photo-frame">{url?<img src={url} alt={label}/>:<div className="reference-photo-empty">Aucune photo enregistrée</div>}</div><div className="reference-photo-copy"><span>{label}</span><strong>{name||"À ajouter"}</strong><label className="reference-photo-button"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={change}/>{saving?"Synchronisation…":url?"Remplacer":"Ajouter"}</label></div></article>}
-function GenerationCard({kind,label,href="/inscription/analyse"}:{kind:BetaMediaKey;label:string;href?:string}){const [url,setUrl]=useState("");useEffect(()=>{let current="";restoreMedia(kind).then(blob=>{if(blob){current=URL.createObjectURL(blob);setUrl(current)}});return()=>{if(current)URL.revokeObjectURL(current)}},[kind]);return <article className="reference-photo-card"><div className="reference-photo-frame">{url?<img src={url} alt={`Look IA ${label}`}/>:<div className="reference-photo-empty">Pas encore généré</div>}</div><div className="reference-photo-copy"><span>LOOK IA</span><strong>{label}</strong><Link className="reference-photo-button" href={href}>{url?"Voir / régénérer":"Générer"}</Link></div></article>}
-function VideoCard({kind,label,href="/inscription/analyse"}:{kind:BetaMediaKey;label:string;href?:string}){const [url,setUrl]=useState("");useEffect(()=>{let current="";restoreMedia(kind).then(blob=>{if(blob){current=URL.createObjectURL(blob);setUrl(current)}});return()=>{if(current)URL.revokeObjectURL(current)}},[kind]);return <article className="reference-photo-card"><div className="reference-photo-frame">{url?<video src={url} controls playsInline preload="metadata"/>:<div className="reference-photo-empty">Défilé pas encore généré</div>}</div><div className="reference-photo-copy"><span>DÉFILÉ</span><strong>{label}</strong><Link className="reference-photo-button" href={href}>{url?"Voir / régénérer":"Créer mon défilé"}</Link></div></article>}
+export default function ProfilPage() {
+  const [profile, setProfile] = useState<BetaProfile | null>(null);
+  const [codeEnabled, setCodeEnabled] = useState(false);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [codeMessage, setCodeMessage] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
 
-export default function ProfilPage(){
- const [p,setP]=useState<BetaProfile|null>(null);const [durable,setDurable]=useState(false);const [codeEnabled,setCodeEnabled]=useState(false);const [showCodeModal,setShowCodeModal]=useState(false);const [codeMessage,setCodeMessage]=useState("");const [codeError,setCodeError]=useState("");const [savingCode,setSavingCode]=useState(false);
- useEffect(()=>{let alive=true;(async()=>{const local=readBetaProfile();let cloud=null;try{cloud=await readBetaProfileCloud()}catch{}const merged={...(cloud||{}),...local};if(!alive)return;saveBetaProfile(merged);setP(merged);const auth=await betaAuthStatus();if(alive){setDurable(auth.durable);setCodeEnabled(auth.accessCodeEnabled);trace("profile_access_status",{durable:auth.durable,accessCodeEnabled:auth.accessCodeEnabled});if(auth.accessCodeEnabled){saveBetaProfile({codeConfigured:true});setP(current=>current?{...current,codeConfigured:true}:current)}}})();return()=>{alive=false}},[]);
- useEffect(()=>{if(!showCodeModal)return;const onKey=(e:KeyboardEvent)=>{if(e.key==="Escape"&&!savingCode)setShowCodeModal(false)};document.addEventListener("keydown",onKey);const old=document.body.style.overflow;document.body.style.overflow="hidden";return()=>{document.removeEventListener("keydown",onKey);document.body.style.overflow=old}},[showCodeModal,savingCode]);
- if(p===null)return <main className="account-page"/>;
- if(!p.email&&!p.pseudo)return <main className="account-page"><section className="account-shell"><div className="account-content"><div className="profile-status"><div><span>MODE BÊTA</span><h2>Aucun profil connecté.</h2><p>Créez votre profil ou retrouvez votre espace avec votre email et votre code personnel.</p></div><Link href="/connexion">Connexion →</Link></div></div></section></main>;
- const styles=(p.styles||[]).join(" · ")||"À définir";const colors=(p.likedColors||[]).join(" · ")||"À définir";const profileEmail=p.email||"";
- const updatePhoto=(field:"portraitName"|"fullName",name:string)=>{const next={...p,[field]:name};setP(next);saveBetaProfile({[field]:name});void saveBetaProfileCloud(next)};
- async function leave(){trace("profile_signout_clicked",{accessCodeEnabled:codeEnabled});await signOutBetaCloud();await clearBetaMedia();clearBetaProfile();location.href="/connexion"}
- function openCodeModal(){setCodeError("");setCodeMessage("");setShowCodeModal(true);trace("profile_code_modal_opened",{accessCodeEnabled:codeEnabled})}
- async function saveCode(e:FormEvent<HTMLFormElement>){e.preventDefault();setCodeMessage("");setCodeError("");setSavingCode(true);trace("profile_code_submit_started",{existingCode:codeEnabled});const fd=new FormData(e.currentTarget);const code=String(fd.get("code")||"");const confirm=String(fd.get("confirmCode")||"");if(code!==confirm){setCodeError("Les deux codes ne correspondent pas.");setSavingCode(false);trace("profile_code_submit_failed",{reason:"mismatch"});return}const result=await createOrUpdateBetaAccessCode(profileEmail,code);if(!result.ok){setCodeError(result.error||"Impossible d’enregistrer le code.");setSavingCode(false);trace("profile_code_submit_failed",{reason:result.error||"unknown"});return}const next={...p,codeConfigured:true};setP(next);saveBetaProfile({codeConfigured:true});await saveBetaProfileCloud(next);setCodeEnabled(true);setDurable(true);setCodeMessage("✓ Code enregistré. Vous pouvez maintenant vous connecter avec votre email + ce code sur un autre appareil.");e.currentTarget.reset();setSavingCode(false);trace("profile_code_submit_success")}
- return <main className="account-page"><header className="account-header"><Link href="/" className="account-logo">LOOK&GO</Link><div><span>{p.email}</span><button onClick={leave}>Se déconnecter</button></div></header><section className="account-shell"><aside><p>MON ESPACE BÊTA</p><h1>Bonjour<br/><em>{p.pseudo||"vous"}</em></h1><nav><Link href="/profil" className="active">Mon profil</Link><Link href="/inscription">Modifier mes informations</Link><Link href="/inscription/style">Mes préférences mode</Link><Link href="/inscription/analyse">Mes 3 looks IA</Link><Link href="/inscription/analyse">Try-On & Défilé</Link><Link href="/mariage">Pack Mariage</Link><Link href="/shopping">Trouver une pièce</Link><Link href="/feedback">Donner mon avis bêta</Link></nav></aside><div className="account-content"><div className="profile-status"><div><span>{codeEnabled?"CODE PERSONNEL ACTIF":durable?"ESPACE CONNECTÉ":"ACTION RECOMMANDÉE"}</span><h2>{codeEnabled?"Votre espace est récupérable sur un autre appareil.":"Créez votre code personnel Look&Go."}</h2><p>{codeEnabled?"Utilisez votre email et votre code à 6 chiffres sur la page « Retrouver mon espace ».":"Les premiers bêta-testeurs n’avaient pas encore de code. Créez-le maintenant sans perdre votre profil, vos photos ou vos looks."}</p></div><button className="profile-code-cta" type="button" onClick={openCodeModal}>{codeEnabled?"Modifier mon code":"Créer mon code"} →</button></div><section className="reference-photos access-code-section"><div className="reference-photos-head"><span>MON ACCÈS</span><h2>{codeEnabled?"Code personnel configuré":"Code personnel à créer"}</h2><p>{codeEnabled?"Votre code est enregistré de façon sécurisée et n’est jamais affiché dans votre profil.":"Créez votre code à 6 chiffres pour retrouver votre espace avec votre email sur un autre appareil."}</p></div><button className="reference-photo-button" type="button" onClick={openCodeModal}>{codeEnabled?"Modifier mon code":"Créer mon code personnel"}</button></section><section className="reference-photos"><div className="reference-photos-head"><span>WEDDING CONCIERGE · PACK MARIAGE</span><h2>{p.wedding?.enabled?`Pack actif · ${weddingRoleLabel(p.wedding.role)}`:"Préparez un mariage sans refaire votre profil"}</h2><p>{p.wedding?.enabled?`${p.wedding.date||"Date à préciser"} · ${p.wedding.location||"Lieu à préciser"} · budget ${p.wedding.budget||p.budget||"—"} €. Vos looks mariage sont générés et sauvegardés séparément de vos looks quotidiens.`:"Ajoutez seulement votre rôle, la date, le lieu, le dress code et votre budget. Look&Go réutilise vos tailles, goûts et photos existantes."}</p></div><Link href="/mariage" className="reference-photo-button">{p.wedding?.enabled?"Ouvrir mon Pack Mariage":"Activer le Pack Mariage"}</Link></section><section className="reference-photos"><div className="reference-photos-head"><span>MES PRÉFÉRENCES MODE</span><h2>{trendLabel(p.trendPreference)}</h2><p>Niveau d’audace : {boldnessLabel(p.trendBoldness)} · {typeof p.trendBoldness==="number"?p.trendBoldness:50}/100. Ces réglages modifient réellement la direction envoyée au moteur Try-On.</p></div><Link href="/inscription/style" className="reference-photo-button">Modifier mes préférences mode</Link></section><section className="reference-photos"><div className="reference-photos-head"><span>PHOTOS DE RÉFÉRENCE OBLIGATOIRES</span><h2>Portrait & silhouette</h2><p>Ces deux photos sont utilisées pour générer vos photos et vidéos sur vous. Elles sont restaurées automatiquement lorsqu’elles sont disponibles dans votre espace.</p></div><div className="reference-photos-grid"><PhotoCard kind="portrait" label="PORTRAIT" name={p.portraitName} onSaved={n=>updatePhoto("portraitName",n)}/><PhotoCard kind="fullBody" label="PLEIN PIED" name={p.fullName} onSaved={n=>updatePhoto("fullName",n)}/></div></section><section className="reference-photos"><div className="reference-photos-head"><span>MES LOOKS GÉNÉRÉS</span><h2>Signature · Équilibre · Smart</h2><p>Vos dernières visualisations Try-On quotidiennes sont disponibles ici.</p></div><div className="reference-photos-grid generated-looks-grid"><GenerationCard kind="tryonSignature" label="SIGNATURE"/><GenerationCard kind="tryonBalance" label="ÉQUILIBRE"/><GenerationCard kind="tryonSmart" label="SMART"/></div></section>{p.wedding?.enabled&&<section className="reference-photos"><div className="reference-photos-head"><span>MES LOOKS MARIAGE</span><h2>Wedding Concierge · Signature · Équilibre · Smart</h2><p>Ces visualisations sont conservées séparément pour ne jamais écraser vos looks habituels.</p></div><div className="reference-photos-grid generated-looks-grid"><GenerationCard kind="weddingTryonSignature" label="MARIAGE · SIGNATURE" href="/inscription/analyse?mode=wedding"/><GenerationCard kind="weddingTryonBalance" label="MARIAGE · ÉQUILIBRE" href="/inscription/analyse?mode=wedding"/><GenerationCard kind="weddingTryonSmart" label="MARIAGE · SMART" href="/inscription/analyse?mode=wedding"/></div></section>}<section className="reference-photos"><div className="reference-photos-head"><span>MES VIDÉOS GÉNÉRÉES</span><h2>Mes défilés</h2><p>Vos vidéos générées sont également retrouvées automatiquement lorsqu’elles sont disponibles.</p></div><div className="reference-photos-grid generated-looks-grid"><VideoCard kind="videoSignature" label="SIGNATURE"/><VideoCard kind="videoBalance" label="ÉQUILIBRE"/><VideoCard kind="videoSmart" label="SMART"/></div></section>{p.wedding?.enabled&&<section className="reference-photos"><div className="reference-photos-head"><span>MES DÉFILÉS MARIAGE</span><h2>Wedding Concierge</h2><p>Les vidéos de votre Pack Mariage restent elles aussi séparées de vos défilés quotidiens.</p></div><div className="reference-photos-grid generated-looks-grid"><VideoCard kind="weddingVideoSignature" label="MARIAGE · SIGNATURE" href="/inscription/analyse?mode=wedding"/><VideoCard kind="weddingVideoBalance" label="MARIAGE · ÉQUILIBRE" href="/inscription/analyse?mode=wedding"/><VideoCard kind="weddingVideoSmart" label="MARIAGE · SMART" href="/inscription/analyse?mode=wedding"/></div></section>}<div className="account-grid"><article><span>IDENTITÉ</span><strong>{p.pseudo||"À compléter"}</strong><p>{p.email}</p></article><article><span>MENSURATIONS</span><strong>{p.height?`${p.height} cm`:"À compléter"}</strong><p>{p.weight?`${p.weight} kg`:"Poids à renseigner"}</p></article><article><span>STYLE</span><strong>{p.budgetMode||"À définir"}</strong><p>{p.budget?`Budget tenue : ${p.budget} €`:"Budget à renseigner"}</p></article><article><span>TAILLES</span><strong>{p.topSize||"—"} / {p.bottomSize||"—"}</strong><p>Pointure {p.shoeSize||"—"}</p></article></div><div className="account-grid"><article><span>STYLES AIMÉS</span><strong>{styles}</strong><p>Base des recommandations bêta</p></article><article><span>COULEURS</span><strong>{colors}</strong><p>À éviter : {(p.avoidColors||[]).join(" · ")||"aucune"}</p></article></div><div className="account-note"><strong>WORKFLOW CLIENT</strong><p>Email + code personnel → profil et historique restaurés → préférences de tendance → portrait + plein pied obligatoires → Try-On sur vous → shopping → défilé. Le Pack Mariage ajoute un brief événement sans recréer votre profil.</p></div></div></section>{showCodeModal&&<div className="code-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target&&!savingCode)setShowCodeModal(false)}}><section className="code-modal" role="dialog" aria-modal="true" aria-labelledby="code-modal-title"><button className="code-modal-close" type="button" aria-label="Fermer" disabled={savingCode} onClick={()=>setShowCodeModal(false)}>×</button><span>ACCÈS LOOK&GO</span><h2 id="code-modal-title">{codeEnabled?"Modifier votre code":"Créer votre code personnel"}</h2><p>Email associé : <strong>{profileEmail}</strong></p><p>Choisissez exactement 6 chiffres. Ce code servira avec votre email pour retrouver votre espace.</p><form onSubmit={saveCode} className="access-code-form"><label>Nouveau code<input name="code" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoFocus autoComplete="new-password" placeholder="••••••"/></label><label>Confirmer le code<input name="confirmCode" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoComplete="new-password" placeholder="••••••"/></label>{codeError&&<div className="profile-required">{codeError}</div>}{codeMessage&&<div className="profile-required code-success">{codeMessage}</div>}<button className="reference-photo-button" type="submit" disabled={savingCode}>{savingCode?"Enregistrement…":"Enregistrer mon code"}</button>{codeMessage&&<button className="code-modal-done" type="button" onClick={()=>setShowCodeModal(false)}>Terminer</button>}</form></section></div>}</main>
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const local = readBetaProfile();
+      let cloud: BetaProfile | null = null;
+      try {
+        cloud = await readBetaProfileCloud();
+      } catch {}
+      const merged = { ...(cloud || {}), ...local };
+      if (!alive) return;
+      saveBetaProfile(merged);
+      setProfile(merged);
+
+      const auth = await betaAuthStatus();
+      if (!alive) return;
+      setCodeEnabled(auth.accessCodeEnabled);
+      if (auth.accessCodeEnabled) {
+        saveBetaProfile({ codeConfigured: true });
+        setProfile((current) => (current ? { ...current, codeConfigured: true } : current));
+      }
+      trace("profile_dashboard_opened", {
+        durable: auth.durable,
+        accessCodeEnabled: auth.accessCodeEnabled,
+      });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showCodeModal) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savingCode) setShowCodeModal(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [showCodeModal, savingCode]);
+
+  async function leave() {
+    trace("profile_signout_clicked", { accessCodeEnabled: codeEnabled });
+    await signOutBetaCloud();
+    await clearBetaMedia();
+    clearBetaProfile();
+    location.href = "/connexion";
+  }
+
+  function openCodeModal() {
+    setCodeError("");
+    setCodeMessage("");
+    setShowCodeModal(true);
+    trace("profile_code_modal_opened", { accessCodeEnabled: codeEnabled });
+  }
+
+  async function saveCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile?.email) return;
+    setCodeMessage("");
+    setCodeError("");
+    setSavingCode(true);
+
+    const form = new FormData(event.currentTarget);
+    const code = String(form.get("code") || "");
+    const confirm = String(form.get("confirmCode") || "");
+    if (!/^\d{6}$/.test(code)) {
+      setCodeError("Le code doit contenir exactement 6 chiffres.");
+      setSavingCode(false);
+      return;
+    }
+    if (code !== confirm) {
+      setCodeError("Les deux codes ne correspondent pas.");
+      setSavingCode(false);
+      return;
+    }
+
+    const result = await createOrUpdateBetaAccessCode(profile.email, code);
+    if (!result.ok) {
+      setCodeError(result.error || "Impossible d’enregistrer le code.");
+      setSavingCode(false);
+      return;
+    }
+
+    const next = { ...profile, codeConfigured: true };
+    setProfile(next);
+    saveBetaProfile({ codeConfigured: true });
+    await saveBetaProfileCloud(next);
+    setCodeEnabled(true);
+    setCodeMessage("✓ Code enregistré. Votre espace peut maintenant être retrouvé avec votre email sur un autre appareil.");
+    event.currentTarget.reset();
+    setSavingCode(false);
+    trace("profile_code_submit_success");
+  }
+
+  if (profile === null) {
+    return <main className="account-page dashboard-account-page" />;
+  }
+
+  if (!profile.email && !profile.pseudo) {
+    return (
+      <main className="account-page dashboard-account-page">
+        <section className="dashboard-profile-shell">
+          <div className="profile-status">
+            <div>
+              <span>MODE BÊTA</span>
+              <h2>Aucun profil connecté.</h2>
+              <p>Créez votre profil ou retrouvez votre espace avec votre email et votre code personnel.</p>
+            </div>
+            <Link href="/connexion">Connexion →</Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="account-page dashboard-account-page">
+      <header className="account-header dashboard-account-header">
+        <Link href="/" className="account-logo">LOOK&GO</Link>
+        <div>
+          <span>{profile.email}</span>
+          <button onClick={leave}>Se déconnecter</button>
+        </div>
+      </header>
+
+      <section className="dashboard-profile-shell">
+        {!codeEnabled && (
+          <aside className="dashboard-access-banner" aria-label="Sécuriser mon espace">
+            <div>
+              <span>ESPACE BÊTA</span>
+              <strong>Sécurisez votre dressing privé.</strong>
+              <p>Créez votre code personnel à 6 chiffres pour retrouver votre profil, vos photos et vos looks sur un autre appareil.</p>
+            </div>
+            <button type="button" onClick={openCodeModal}>Créer mon code →</button>
+          </aside>
+        )}
+
+        <ProfileDashboard />
+      </section>
+
+      {showCodeModal && (
+        <div className="code-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !savingCode) setShowCodeModal(false);
+        }}>
+          <section className={`code-modal${codeMessage ? " code-success" : ""}`} role="dialog" aria-modal="true" aria-labelledby="profile-code-title">
+            <button className="code-modal-close" type="button" disabled={savingCode} onClick={() => setShowCodeModal(false)} aria-label="Fermer">×</button>
+            <span>MON ACCÈS LOOK&GO</span>
+            <h2 id="profile-code-title">{codeEnabled ? "Modifier mon code personnel" : "Créer mon code personnel"}</h2>
+            <p>Votre code reste secret et n’est jamais affiché dans votre profil. Il sert uniquement à retrouver votre espace avec <strong>{profile.email}</strong>.</p>
+            <form className="access-code-form" onSubmit={saveCode}>
+              <label>Nouveau code à 6 chiffres<input name="code" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete="new-password" required placeholder="••••••" /></label>
+              <label>Confirmer le code<input name="confirmCode" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} autoComplete="new-password" required placeholder="••••••" /></label>
+              {codeError && <p className="profile-required">{codeError}</p>}
+              {codeMessage && <p className="profile-required">{codeMessage}</p>}
+              <button className="reference-photo-button" type="submit" disabled={savingCode}>{savingCode ? "Enregistrement…" : "Enregistrer mon code"}</button>
+              {codeMessage && <button className="code-modal-done" type="button" onClick={() => setShowCodeModal(false)}>Terminer</button>}
+            </form>
+          </section>
+        </div>
+      )}
+    </main>
+  );
 }
