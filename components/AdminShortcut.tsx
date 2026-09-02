@@ -5,20 +5,28 @@ import {useEffect,useState} from "react";
 import {createPortal} from "react-dom";
 import {onAuthStateChanged} from "firebase/auth";
 import {getLookGoFirebase} from "@/lib/firebase-client";
+import {readBetaProfile} from "@/lib/beta-profile";
 
 const ADMIN_EMAIL="rigahludovic@gmail.com";
 
 export default function AdminShortcut(){
- const [isAdmin,setIsAdmin]=useState(false);
+ const [isAdminVisible,setIsAdminVisible]=useState(false);
+ const [isAdminAuthenticated,setIsAdminAuthenticated]=useState(false);
  const [target,setTarget]=useState<HTMLElement|null>(null);
  const [mode,setMode]=useState<"profile"|"landing">("landing");
 
  useEffect(()=>{
+  const profileEmail=String(readBetaProfile().email||"").trim().toLowerCase();
+  const profileIsAdmin=profileEmail===ADMIN_EMAIL;
+  setIsAdminVisible(profileIsAdmin);
+
   const firebase=getLookGoFirebase();
   const unsubscribe=firebase
    ? onAuthStateChanged(firebase.auth,user=>{
       const email=String(user?.email||"").trim().toLowerCase();
-      setIsAdmin(email===ADMIN_EMAIL);
+      const authenticated=email===ADMIN_EMAIL;
+      setIsAdminAuthenticated(authenticated);
+      setIsAdminVisible(profileIsAdmin||authenticated);
      })
    : ()=>{};
 
@@ -34,11 +42,13 @@ export default function AdminShortcut(){
   return()=>{unsubscribe();window.clearInterval(timer);};
  },[]);
 
- if(!isAdmin||!target)return null;
+ if(!isAdminVisible||!target)return null;
+ const href=isAdminAuthenticated?"/admin/ai":"/connexion?mode=return&returnTo=%2Fadmin%2Fai";
  return createPortal(
   <Link
-   href="/admin/ai"
+   href={href}
    aria-label="Ouvrir la console d’administration IA"
+   title={isAdminAuthenticated?"Console IA Look&Go":"Reconnectez votre compte administrateur pour ouvrir la console IA"}
    style={{
     marginLeft:mode==="profile"?"8px":"10px",
     border:"1px solid currentColor",
@@ -52,7 +62,7 @@ export default function AdminShortcut(){
     textTransform:"uppercase",
     whiteSpace:"nowrap",
    }}
-  >Admin</Link>,
+  >Admin IA</Link>,
   target,
  );
 }
