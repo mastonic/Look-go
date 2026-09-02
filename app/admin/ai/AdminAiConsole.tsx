@@ -6,7 +6,8 @@ import {getLookGoFirebase} from "@/lib/firebase-client";
 
 type ProviderId="openai"|"google"|"anthropic"|"higgsfield";
 type Provider={id:ProviderId;label:string;enabled:boolean;configured:boolean;capabilities:string[]};
-type State={providers:Provider[];canManage:boolean};
+type LastVideo={provider:string;model:string;videoId:string;duration:number;createdAt:string|null;status:string;promptVersion:string};
+type State={providers:Provider[];canManage:boolean;lastVideo?:LastVideo|null};
 type RowState={enabled:boolean;apiKey:string;busy:boolean;message:string;error:string};
 const ADMIN_EMAIL="rigahludovic@gmail.com";
 const PROVIDER_HELP:Record<ProviderId,string>={openai:"OPENAI_API_KEY",google:"GOOGLE_AI_API_KEY",anthropic:"ANTHROPIC_API_KEY",higgsfield:"HIGGSFIELD_API_KEY"};
@@ -66,6 +67,7 @@ export default function AdminAiConsole(){
   {fatal&&<div className="admin-ai-error">{fatal}</div>}
   {!data&&!fatal&&<div className="admin-ai-loading">Chargement de la console…</div>}
   {data&&<>
+   {data.lastVideo&&<section className="admin-ai-notice"><strong>Dernière génération vidéo</strong><p><b>Moteur :</b> {data.lastVideo.provider==="openai"?"OpenAI":data.lastVideo.provider} · <b>Modèle :</b> {data.lastVideo.model} · <b>Durée :</b> {data.lastVideo.duration}s · <b>Statut :</b> {data.lastVideo.status}</p><p><b>Prompt :</b> {data.lastVideo.promptVersion} · <b>ID :</b> <code>{data.lastVideo.videoId}</code>{data.lastVideo.createdAt?<> · <b>Créée :</b> {new Date(data.lastVideo.createdAt).toLocaleString("fr-FR")}</>:null}</p></section>}
    {!data.canManage&&<div className="admin-ai-warning"><strong>Gestion distante désactivée.</strong> Ajoutez <code>VERCEL_TOKEN</code> côté serveur pour permettre la rotation des clés.</div>}
    <section className="admin-ai-grid">{providers.map(provider=>{const row=rows[provider.id];if(!row)return null;return <article className="admin-ai-card" key={provider.id}>
     <div className="admin-ai-card-top"><div><span className={`admin-ai-dot ${provider.configured?"ok":"off"}`}/><h2>{provider.label}</h2></div><label className="admin-ai-switch"><input type="checkbox" checked={row.enabled} onChange={event=>patch(provider.id,{enabled:event.target.checked})}/><span/></label></div>
