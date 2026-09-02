@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
-import { WARDROBE_CATEGORIES, type WardrobeDetection } from "@/lib/wardrobe";
+import {
+  WARDROBE_CATEGORIES,
+  WARDROBE_CATEGORY_LABELS,
+  canonicalColorFamily,
+  dedupeWardrobeDetections,
+  type WardrobeDetection,
+} from "@/lib/wardrobe";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 1_300_000;
-const OPENAI_TIMEOUT_MS = 45_000;
+const MAX_ITEMS = 40;
+const OPENAI_TIMEOUT_MS = 50_000;
 
 function bearerToken(request: Request) {
   return (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
@@ -72,21 +79,24 @@ function normalizeDetection(raw: Record<string, unknown>, index: number): Wardro
     : "other";
   const box = raw.bbox && typeof raw.bbox === "object" ? (raw.bbox as Record<string, unknown>) : {};
   const clampBox = (value: unknown) => Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
+  const primaryColor = cleanString(raw.primary_color, 60) || "Non précisée";
+  const modelColorFamily = cleanString(raw.color_family, 40);
   return {
     tempId: cleanString(raw.temp_id, 48) || `item_${String(index + 1).padStart(2, "0")}`,
     sourceImageIndex: Math.max(0, Math.min(MAX_IMAGES - 1, Math.round(Number(raw.source_image_index) || 0))),
     category,
-    categoryLabel: cleanString(raw.category_label, 80),
+    categoryLabel: WARDROBE_CATEGORY_LABELS[category],
     subcategory: cleanString(raw.subcategory, 80) || "Non précisé",
     garmentType: cleanString(raw.garment_type, 80) || cleanString(raw.subcategory, 80) || "Vêtement",
-    primaryColor: cleanString(raw.primary_color, 60) || "Non précisée",
+    primaryColor,
+    colorFamily: canonicalColorFamily(modelColorFamily || primaryColor),
     secondaryColors: cleanList(raw.secondary_colors, 4),
     pattern: cleanString(raw.pattern, 60) || "uni",
-    styles: cleanList(raw.styles, 5),
+    styles: cleanList(raw.styles, 6),
     materialGuess: cleanString(raw.material_guess, 80),
     seasons: cleanList(raw.seasons, 4),
-    occasions: cleanList(raw.occasions, 5),
-    visualSignature: cleanString(raw.visual_signature, 180),
+    occasions: cleanList(raw.occasions, 6),
+    visualSignature: cleanString(raw.visual_signature, 220),
     bbox: {
       x: clampBox(box.x),
       y: clampBox(box.y),
@@ -94,7 +104,7 @@ function normalizeDetection(raw: Record<string, unknown>, index: number): Wardro
       height: clampBox(box.height),
     },
     confidence: Math.max(0, Math.min(1, Number(raw.confidence) || 0)),
-    notes: cleanString(raw.notes, 180),
+    notes: cleanString(raw.notes, 220),
   };
 }
 
@@ -111,15 +121,19 @@ async function analyzeWithOpenAI(images: File[]) {
       {
         type: "input_text",
         text: [
-          "Analyse ces photos réelles de penderie pour créer un dressing numérique Look&Go.",
-          "Détecte uniquement les vêtements et accessoires clairement visibles. N'invente jamais une pièce cachée ou ambiguë.",
-          "Une même pièce visible sur plusieurs photos doit idéalement être retournée une seule fois, rattachée à l'image où elle est la plus lisible.",
-          "Sépare les pièces superposées seulement si leurs contours ou caractéristiques permettent de les distinguer avec confiance.",
-          "Utilise le français pour couleurs, matières, styles, occasions et notes. Les codes category doivent rester exactement dans la taxonomie imposée.",
-          "La visual_signature doit décrire les attributs distinctifs utiles à la détection de doublons (ex: blazer noir croisé boutons dorés revers larges), sans marque inventée.",
-          "bbox utilise des coordonnées normalisées 0-1000 sur l'image source: x, y, width, height.",
-          "Si une matière n'est pas identifiable, laisse material_guess vide. Réduis confidence lorsque la pièce est partiellement cachée.",
-          "Maximum 30 pièces distinctes pour ce scan.",
+          "Tu es Look&Go Vision, spécialiste de reconnaissance de vêtements réels dans une penderie.",
+          "Objectif prioritaire: inventaire fidèle, couleurs justes, type de vêtement précis, bonne catégorie et zéro doublon artificiel.",
+          "Détecte TOUT type d'habillement ou accessoire réellement visible: hauts, chemises, t-shirts, polos, débardeurs, corsets, pulls, cardigans, gilets, sweats, pantalons, jeans, leggings, shorts, jupes, robes, combinaisons, ensembles, costumes, tailleurs, blazers, vestes, manteaux, parkas, trenchs, doudounes, vêtements de sport, maillots de bain, lingerie, sous-vêtements, vêtements de nuit/homewear, chaussures, bottes, baskets, sandales, sacs, chapeaux, casquettes, foulards, ceintures, cravates, bijoux, collants, chaussettes et autres pièces portables.",
+          "N'invente jamais une pièce cachée. Si un vêtement est trop masqué, baisse confidence au lieu de deviner.",
+          "Ne confonds pas les objets voisins avec des vêtements: cintres, portes, meubles, draps, rideaux, serviettes et emballages ne sont pas des pièces du dressing sauf s'ils sont clairement portables.",
+          "DOUBLONS: si la même pièce apparaît sur plusieurs photos/angles, retourne-la UNE SEULE FOIS, sur la photo où elle est la plus lisible. En revanche, deux vêtements distincts très similaires visibles côte à côte sur la même photo doivent rester deux pièces distinctes.",
+          "COULEURS: primary_color doit être la teinte visuelle la plus précise en français (ex: bleu marine, écru, bordeaux, kaki olive, rose poudré). color_family doit être une famille simple parmi noir|blanc|gris|beige|marron|bleu|vert|rouge|rose|violet|orange|jaune|dore|argente|multicolore. Ignore les petites ombres et reflets dus à l'éclairage.",
+          "STYLE: renseigne uniquement des styles réellement soutenus par la coupe, la matière et les détails visibles. Exemples: classique, chic, casual, minimaliste, business, streetwear, sportswear, bohème, romantique, preppy, glamour, vintage, rock, workwear, techwear, luxe, avant-garde. 1 à 4 styles suffisent généralement.",
+          "CATÉGORIE: utilise exclusivement la taxonomie fournie. garment_type et subcategory doivent rester précis en français. Exemples: category tops + garment_type chemise; outerwear + blazer; knitwear + cardigan; bottoms + jean droit; shoes + mocassins; headwear + bob; jewelry + collier.",
+          "MATIÈRE: ne l'affirme que si elle est visuellement crédible; sinon chaîne vide. Ne jamais inventer une marque.",
+          "visual_signature doit combiner les signes distinctifs utiles au rapprochement entre angles: type exact, couleur, motif, coupe, texture, boutons, poches, col, manches, longueur, détails métalliques, imprimé. N'utilise pas de position du cintre comme caractéristique.",
+          "bbox utilise des coordonnées normalisées 0-1000 sur la photo source: x, y, width, height et doit encadrer la pièce, pas tout le meuble.",
+          `Maximum ${MAX_ITEMS} pièces distinctes sur ce scan. Privilégie la précision à la quantité lorsque la penderie est très dense.`,
         ].join(" "),
       },
       ...imageUrls.map((image_url) => ({ type: "input_image", image_url, detail: "high" })),
@@ -135,14 +149,14 @@ async function analyzeWithOpenAI(images: File[]) {
           additionalProperties: false,
           required: ["detected_count", "image_count", "notes"],
           properties: {
-            detected_count: { type: "integer", minimum: 0, maximum: 30 },
+            detected_count: { type: "integer", minimum: 0, maximum: MAX_ITEMS },
             image_count: { type: "integer", minimum: 1, maximum: MAX_IMAGES },
             notes: { type: "string" },
           },
         },
         items: {
           type: "array",
-          maxItems: 30,
+          maxItems: MAX_ITEMS,
           items: {
             type: "object",
             additionalProperties: false,
@@ -154,6 +168,7 @@ async function analyzeWithOpenAI(images: File[]) {
               "subcategory",
               "garment_type",
               "primary_color",
+              "color_family",
               "secondary_colors",
               "pattern",
               "styles",
@@ -173,12 +188,13 @@ async function analyzeWithOpenAI(images: File[]) {
               subcategory: { type: "string" },
               garment_type: { type: "string" },
               primary_color: { type: "string" },
+              color_family: { type: "string", enum: ["noir", "blanc", "gris", "beige", "marron", "bleu", "vert", "rouge", "rose", "violet", "orange", "jaune", "dore", "argente", "multicolore"] },
               secondary_colors: { type: "array", maxItems: 4, items: { type: "string" } },
               pattern: { type: "string" },
-              styles: { type: "array", maxItems: 5, items: { type: "string" } },
+              styles: { type: "array", maxItems: 6, items: { type: "string" } },
               material_guess: { type: "string" },
               seasons: { type: "array", maxItems: 4, items: { type: "string" } },
-              occasions: { type: "array", maxItems: 5, items: { type: "string" } },
+              occasions: { type: "array", maxItems: 6, items: { type: "string" } },
               visual_signature: { type: "string" },
               bbox: {
                 type: "object",
@@ -212,12 +228,12 @@ async function analyzeWithOpenAI(images: File[]) {
           verbosity: "low",
           format: {
             type: "json_schema",
-            name: "lookgo_wardrobe_scan",
+            name: "lookgo_wardrobe_scan_v2",
             strict: true,
             schema,
           },
         },
-        max_output_tokens: 7000,
+        max_output_tokens: 9000,
       }),
       signal: controller.signal,
     });
@@ -229,14 +245,18 @@ async function analyzeWithOpenAI(images: File[]) {
     const outputText = extractOutputText(data);
     if (!outputText) throw new Error("OPENAI_EMPTY_OUTPUT");
     const parsed = JSON.parse(outputText) as { summary?: Record<string, unknown>; items?: Array<Record<string, unknown>> };
-    const items = Array.isArray(parsed.items) ? parsed.items.slice(0, 30).map(normalizeDetection) : [];
+    const rawItems = Array.isArray(parsed.items) ? parsed.items.slice(0, MAX_ITEMS).map(normalizeDetection) : [];
+    const items = dedupeWardrobeDetections(rawItems);
+    const duplicatesRemoved = Math.max(0, rawItems.length - items.length);
     return {
       model,
       provider: "openai",
       summary: {
         detectedCount: items.length,
+        rawDetectedCount: rawItems.length,
+        duplicatesRemoved,
         imageCount: images.length,
-        notes: cleanString(parsed.summary?.notes, 240),
+        notes: cleanString(parsed.summary?.notes, 280),
       },
       items,
     };
@@ -262,7 +282,7 @@ export async function POST(request: Request) {
     }
 
     const result = await analyzeWithOpenAI(images);
-    console.info("WARDROBE_SCAN_SUCCESS", JSON.stringify({ uid, count: result.items.length, model: result.model, durationMs: Date.now() - started }));
+    console.info("WARDROBE_SCAN_SUCCESS", JSON.stringify({ uid, count: result.items.length, duplicatesRemoved: result.summary.duplicatesRemoved, model: result.model, durationMs: Date.now() - started }));
     return NextResponse.json({ ...result, durationMs: Date.now() - started });
   } catch (error) {
     const code = error instanceof Error ? (error.name === "AbortError" ? "OPENAI_TIMEOUT" : error.message) : "WARDROBE_SCAN_ERROR";
