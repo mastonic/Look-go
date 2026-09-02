@@ -57,7 +57,7 @@ export type WardrobeDetection = {
   subcategory: string;
   garmentType: string;
   primaryColor: string;
-  colorFamily: string;
+  colorFamily?: string;
   secondaryColors: string[];
   pattern: string;
   styles: string[];
@@ -80,8 +80,8 @@ export type WardrobeItem = WardrobeDetection & {
   updatedAt?: unknown;
 };
 
-function normalize(value: string) {
-  return value
+function normalize(value: unknown) {
+  return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -89,11 +89,11 @@ function normalize(value: string) {
     .trim();
 }
 
-function tokens(value: string) {
+function tokens(value: unknown) {
   return new Set(normalize(value).split(" ").filter(Boolean));
 }
 
-function tokenSimilarity(a: string, b: string) {
+function tokenSimilarity(a: unknown, b: unknown) {
   const left = tokens(a);
   const right = tokens(b);
   if (!left.size || !right.size) return 0;
@@ -104,7 +104,7 @@ function tokenSimilarity(a: string, b: string) {
   return shared / Math.max(left.size, right.size);
 }
 
-export function canonicalColorFamily(value: string) {
+export function canonicalColorFamily(value: unknown) {
   const v = normalize(value);
   const aliases: Array<[string, string[]]> = [
     ["noir", ["noir", "black", "anthracite tres fonce"]],
@@ -147,7 +147,7 @@ export function wardrobeDuplicateScore(
 ) {
   if (a.category !== b.category) return 0;
   const signature = tokenSimilarity(a.visualSignature, b.visualSignature);
-  const typeSimilarity = tokenSimilarity(`${a.subcategory} ${a.garmentType}`, `${b.subcategory} ${b.garmentType}`);
+  const typeSimilarity = tokenSimilarity(`${a.subcategory || ""} ${a.garmentType || ""}`, `${b.subcategory || ""} ${b.garmentType || ""}`);
   const exactType = normalize(a.garmentType) === normalize(b.garmentType) || normalize(a.subcategory) === normalize(b.subcategory) ? 1 : 0;
   const colorFamilyA = canonicalColorFamily(a.colorFamily || a.primaryColor);
   const colorFamilyB = canonicalColorFamily(b.colorFamily || b.primaryColor);
@@ -157,11 +157,28 @@ export function wardrobeDuplicateScore(
   return Math.min(1, signature * 0.46 + typeSimilarity * 0.19 + exactType * 0.1 + colorFamily * 0.13 + exactColor * 0.07 + pattern * 0.05);
 }
 
+function bboxIou(a: WardrobeBoundingBox, b: WardrobeBoundingBox) {
+  const ax2 = a.x + a.width;
+  const ay2 = a.y + a.height;
+  const bx2 = b.x + b.width;
+  const by2 = b.y + b.height;
+  const ix = Math.max(0, Math.min(ax2, bx2) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(ay2, by2) - Math.max(a.y, b.y));
+  const intersection = ix * iy;
+  if (!intersection) return 0;
+  const union = a.width * a.height + b.width * b.height - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
 export function dedupeWardrobeDetections(items: WardrobeDetection[], threshold = 0.82) {
   const sorted = [...items].sort((a, b) => b.confidence - a.confidence);
   const unique: WardrobeDetection[] = [];
   for (const item of sorted) {
-    const duplicate = unique.some((saved) => wardrobeDuplicateScore(item, saved) >= threshold);
+    const duplicate = unique.some((saved) => {
+      const score = wardrobeDuplicateScore(item, saved);
+      if (item.sourceImageIndex !== saved.sourceImageIndex) return score >= threshold;
+      return score >= threshold && bboxIou(item.bbox, saved.bbox) >= 0.55;
+    });
     if (!duplicate) unique.push(item);
   }
   return unique.sort((a, b) => a.sourceImageIndex - b.sourceImageIndex || a.tempId.localeCompare(b.tempId));
