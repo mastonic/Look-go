@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
+import AdminShortcut from "@/components/AdminShortcut";
 import "./globals.css";
 
 const serif = Cormorant_Garamond({
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="fr" className={`${serif.variable} ${sans.variable}`}>
       <body>
         <PwaRegister />
+        <AdminShortcut />
         {children}
       </body>
     </html>
