@@ -16,7 +16,11 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(APP_SHELL)).catch(() => undefined));
+  event.waitUntil(
+    caches.open(STATIC_CACHE).then((cache) =>
+      Promise.allSettled(APP_SHELL.map((url) => cache.add(url)))
+    )
+  );
   self.skipWaiting();
 });
 
@@ -40,14 +44,13 @@ async function networkFirst(request) {
     }
     return response;
   } catch {
-    const cached = await caches.match(request);
-    return cached || (await caches.match(OFFLINE_URL));
+    return (await caches.match(request)) || (await caches.match(OFFLINE_URL)) || Response.error();
   }
 }
 
 async function staleWhileRevalidate(request) {
   const cached = await caches.match(request);
-  const network = fetch(request)
+  const networkPromise = fetch(request)
     .then(async (response) => {
       if (response.ok && response.type === "basic") {
         const cache = await caches.open(STATIC_CACHE);
@@ -55,8 +58,14 @@ async function staleWhileRevalidate(request) {
       }
       return response;
     })
-    .catch(() => undefined);
-  return cached || network || Response.error();
+    .catch(() => null);
+
+  if (cached) {
+    networkPromise.catch(() => undefined);
+    return cached;
+  }
+
+  return (await networkPromise) || Response.error();
 }
 
 self.addEventListener("fetch", (event) => {
