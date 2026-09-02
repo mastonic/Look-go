@@ -1,34 +1,78 @@
-const CACHE_NAME = "lookgo-shell-v1";
-const APP_SHELL = ["/", "/connexion", "/profil", "/lookgo-logo.svg"];
+const VERSION = "lookgo-pwa-v2";
+const STATIC_CACHE = `${VERSION}-static`;
+const PAGE_CACHE = `${VERSION}-pages`;
+const OFFLINE_URL = "/offline";
+const APP_SHELL = [
+  "/",
+  "/connexion",
+  "/profil",
+  "/dressing",
+  "/mariage",
+  "/shopping",
+  OFFLINE_URL,
+  "/lookgo-logo.svg",
+  "/pwa-192.png",
+  "/pwa-512.png",
+];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).catch(() => undefined));
+  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(APP_SHELL)).catch(() => undefined));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => !key.startsWith(VERSION)).map((key) => caches.delete(key))))
   );
   self.clients.claim();
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok && response.type === "basic") {
+      const cache = await caches.open(PAGE_CACHE);
+      cache.put(request, response.clone()).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || (await caches.match(OFFLINE_URL));
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  const network = fetch(request)
+    .then(async (response) => {
+      if (response.ok && response.type === "basic") {
+        const cache = await caches.open(STATIC_CACHE);
+        cache.put(request, response.clone()).catch(() => undefined);
+      }
+      return response;
+    })
+    .catch(() => undefined);
+  return cached || network || Response.error();
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
+
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/image")) return;
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        const copy = response.clone();
-        if (response.ok && response.type === "basic") {
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
-        }
-        return response;
-      })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
-  );
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  if (["style", "script", "font", "image"].includes(request.destination)) {
+    event.respondWith(staleWhileRevalidate(request));
+  }
 });
