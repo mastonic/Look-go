@@ -32,7 +32,23 @@ export default function AdminShortcut(){
 
  if(!isAdmin||!target)return null;
  return createPortal(
-  <Link href="/admin/ai" className="lookgo-admin-shortcut" aria-label="Ouvrir la console d’administration IA">Admin</Link>,
+  <Link
+   href="/admin/ai"
+   aria-label="Ouvrir la console d’administration IA"
+   style={{
+    marginLeft:"10px",
+    border:"1px solid currentColor",
+    borderRadius:"999px",
+    padding:"10px 14px",
+    color:"inherit",
+    textDecoration:"none",
+    fontSize:"12px",
+    fontWeight:700,
+    letterSpacing:".08em",
+    textTransform:"uppercase",
+    whiteSpace:"nowrap",
+   }}
+  >Admin</Link>,
   target,
  );
 }
