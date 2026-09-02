@@ -23,6 +23,23 @@ const FALLBACK_WEDDING_COLORS=[
  "nude rosé",
 ];
 
+const BRIDAL_TIER_LABELS:Record<WeddingTier,string>={
+ signature:"Princesse couture · Sirène sculptée",
+ balance:"A-line · Empire · Bohème dentelle",
+ smart:"Civil · Satin minimaliste · Manches longues / Dos nu",
+};
+
+const BRIDAL_TIER_RULES=[
+ "BRIDAL TIER RULES — HARD PRODUCT RULE FOR THE BRIDE:",
+ "When the current Look&Go tier is SIGNATURE, create a genuinely bridal couture gown and choose a strong bridal silhouette from: princess ball gown with controlled volume, sculpted mermaid/fishtail gown, or dramatic couture A-line. Refined corsetry, premium satin, mikado, organza, crepe or sophisticated lace are allowed when coherent with the customer's brief.",
+ "When the current tier is BALANCE, create a clearly bridal gown using a different family from Signature: modern A-line, empire waist, soft romantic A-line, or bohemian lace bridal gown. Keep it elegant, wearable and unmistakably made for the bride.",
+ "When the current tier is SMART, create a modern accessible bridal direction distinct from the other two: civil wedding dress, minimalist satin or crepe bridal dress, sleek column dress, long-sleeve bridal dress, or refined open-back bridal dress. Simpler construction is allowed, but it must still read immediately as the bride's wedding dress.",
+ "On a regenerated variant, choose another silhouette or neckline/sleeve/back treatment inside the SAME tier family rather than repeating the previous design.",
+ "Long sleeves and open-back treatments are design options, not mandatory features. Use them only when they suit the selected silhouette and the customer's explicit brief.",
+ "NEVER turn a bride's dress into a bridesmaid dress, wedding-guest dress, prom dress, cocktail dress, party dress or generic evening gown. Do not invent a non-wedding occasion. The result must remain bridal-only.",
+ "The three tiers must be visibly different in silhouette and construction while all remaining credible wedding dresses for the same bride.",
+].join(" ");
+
 export function weddingRoleLabel(role?:WeddingRole){
  if(role==="bride")return "Mariée";
  if(role==="maid")return "Témoin / demoiselle d’honneur";
@@ -46,6 +63,14 @@ export function weddingGarments(event?:WeddingEvent){
  // not by drifting into generic wedding guest clothing.
  if(event?.role==="bride")return ["dress"];
  return ["dress","jumpsuit","tailored suit"];
+}
+
+export function weddingBridalStyleForTier(profile:BetaProfile,tier:WeddingTier){
+ const event=profile.wedding;
+ if(event?.role!=="bride")return "";
+ const preference=event.outfitPreference||"auto";
+ if(preference!=="auto"&&preference!=="dress")return "";
+ return BRIDAL_TIER_LABELS[tier];
 }
 
 function cleanColor(value:string){return value.trim().replace(/\s+/g," ");}
@@ -114,6 +139,10 @@ export function weddingGenerationProfile(profile:BetaProfile):BetaProfile{
  const weddingOccasion=normalizedEvent.role==="bride"
   ? "Mariage · Mariée · robe de mariée / tenue nuptiale uniquement"
   : `Mariage · ${weddingRoleLabel(normalizedEvent.role)}`;
+ const bridalDressMode=normalizedEvent.role==="bride"&&normalizedEvent.outfitPreference==="dress";
+ const generationStyles=bridalDressMode
+  ? unique([...(profile.styles||[]),BRIDAL_TIER_RULES])
+  : profile.styles;
 
  return {
   ...profile,
@@ -124,6 +153,7 @@ export function weddingGenerationProfile(profile:BetaProfile):BetaProfile{
   likedColors:liked,
   avoidColors:unique([...(profile.avoidColors||[]),...(normalizedEvent.avoidColors||[])]),
   occasions:unique([...(profile.occasions||[]),weddingOccasion]),
+  styles:generationStyles,
  };
 }
 
