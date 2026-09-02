@@ -15,7 +15,9 @@ import {
 import { signInAnonymously, type User } from "firebase/auth";
 import { getLookGoFirebase } from "@/lib/firebase-client";
 import {
+  dedupeWardrobeDetections,
   wardrobeDuplicateKey,
+  wardrobeDuplicateScore,
   type WardrobeDetection,
   type WardrobeItem,
 } from "@/lib/wardrobe";
@@ -92,8 +94,15 @@ export async function saveWardrobeDetections(
   const user = await cloudUser();
   if (!fb || !user || detections.length === 0) return 0;
 
+  const existing = await readWardrobeItems(500);
+  const scanUnique = dedupeWardrobeDetections(detections);
+  const unique = scanUnique.filter(
+    (candidate) => !existing.some((saved) => wardrobeDuplicateScore(candidate, saved) >= 0.82),
+  );
+  if (!unique.length) return 0;
+
   const batch = writeBatch(fb.db);
-  detections.forEach((item) => {
+  unique.forEach((item) => {
     const ref = doc(collection(fb.db, "users", user.uid, "wardrobe"));
     batch.set(ref, {
       ...item,
@@ -109,7 +118,7 @@ export async function saveWardrobeDetections(
 
   try {
     await batch.commit();
-    return detections.length;
+    return unique.length;
   } catch {
     return 0;
   }
@@ -124,7 +133,9 @@ export async function updateWardrobeItem(id: string, patch: Partial<WardrobeDete
     if (
       patch.category ||
       patch.subcategory ||
+      patch.garmentType ||
       patch.primaryColor ||
+      patch.colorFamily ||
       patch.pattern ||
       patch.visualSignature
     ) {
