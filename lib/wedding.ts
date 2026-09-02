@@ -111,6 +111,9 @@ export function weddingGenerationProfile(profile:BetaProfile):BetaProfile{
   : normalizedEvent.role==="bride"
    ? weddingColorOptions(eventProfile,3)
    : profile.likedColors;
+ const weddingOccasion=normalizedEvent.role==="bride"
+  ? "Mariage · Mariée · robe de mariée / tenue nuptiale uniquement"
+  : `Mariage · ${weddingRoleLabel(normalizedEvent.role)}`;
 
  return {
   ...profile,
@@ -120,7 +123,7 @@ export function weddingGenerationProfile(profile:BetaProfile):BetaProfile{
   garmentTypes:weddingGarments(normalizedEvent),
   likedColors:liked,
   avoidColors:unique([...(profile.avoidColors||[]),...(normalizedEvent.avoidColors||[])]),
-  occasions:unique([...(profile.occasions||[]),`Mariage · ${weddingRoleLabel(normalizedEvent.role)}`]),
+  occasions:unique([...(profile.occasions||[]),weddingOccasion]),
  };
 }
 
