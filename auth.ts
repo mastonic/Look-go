@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { findUserByEmail, upsertOAuthUser } from "@/lib/db";
+import { findUserByEmail, upsertOAuthUser } from "@/lib/users";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -22,7 +22,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(credentials?.email || "").trim().toLowerCase();
         const password = String(credentials?.password || "");
         if (!email || !password) return null;
-        const user = findUserByEmail(email);
+        const user = await findUserByEmail(email);
         if (!user?.password_hash) return null;
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) return null;
@@ -33,16 +33,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google" && user.email) {
-        const id = upsertOAuthUser(user.email, user.name, user.image);
-        user.id = String(id);
+        user.id = await upsertOAuthUser(user.email, user.name, user.image);
       }
       return true;
     },
     async jwt({ token, user }) {
       if (user?.id) token.userId = user.id;
       if (!token.userId && token.email) {
-        const dbUser = findUserByEmail(String(token.email));
-        if (dbUser) token.userId = String(dbUser.id);
+        const dbUser = await findUserByEmail(String(token.email));
+        if (dbUser) token.userId = dbUser.id;
       }
       return token;
     },

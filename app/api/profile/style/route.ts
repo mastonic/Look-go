@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { saveStyleProfile } from "@/lib/db";
+import { saveStyleProfile } from "@/lib/users";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ export async function PUT(request: Request) {
     };
     if (!input.topSize || !input.bottomSize || !input.shoeSize || !input.preferredStyles.length || !input.budgetTier || !Number.isFinite(input.outfitBudget) || input.outfitBudget < 30) return NextResponse.json({ error: "Complétez votre style, vos tailles et votre budget." }, { status: 400 });
     if (!["Smart", "Équilibre", "Signature"].includes(input.budgetTier)) return NextResponse.json({ error: "Niveau de budget invalide." }, { status: 400 });
-    saveStyleProfile(Number(session.user.id), input);
+    await saveStyleProfile(session.user.id, input);
     return NextResponse.json({ ok: true, next: "/inscription/analyse" });
   } catch {
     return NextResponse.json({ error: "Impossible d’enregistrer vos préférences." }, { status: 500 });
